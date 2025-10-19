@@ -1,0 +1,13 @@
+[package]
+name = "show-me-logs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4.11.0"
+reqwest = "0.12.24"
+serde = {version = "1.0.228", features = ["default", "derive", ]}
+serde_json = {version = "1.0.145", features = ["default"]  }
+chrono = {features = ["default", "serde"], version = "0.4.42"}
+actix-cors = "0.7.1"
+log = "0.4.28"
