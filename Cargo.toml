@@ -11,3 +11,5 @@ serde_json = {version = "1.0.145", features = ["default"]  }
 chrono = {features = ["default", "serde"], version = "0.4.42"}
 actix-cors = "0.7.1"
 log = "0.4.28"
+thiserror = "2.0.17"
+jose-jws  =  {version = "0.1.2"}
