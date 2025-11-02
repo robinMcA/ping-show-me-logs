@@ -13,11 +13,16 @@ import { useState } from "react";
 import "./App.css";
 import useSWR, { type Fetcher } from "swr";
 import type { Root } from "./types";
+import { ReactFlow } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 
-const pages = ["manualLogs", "watchLogs"] as const;
+const pages = ["manualLogs", "watchLogs", "flow"] as const;
 
 const simpleJsonFetcher: Fetcher<Root, string> = (url: string) =>
   fetch(url).then((r) => r.json());
+
+const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
+
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
   togglePage: (pageKey: (typeof pages)[number]) => void,
@@ -99,12 +104,50 @@ const WatchLogs = () => {
   );
 };
 
+const ReactFlowComp = () => {
+  const { data: journeyList } = useSWR(
+    `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey`,
+    jsonFetcher,
+  );
+  const [selectedJourney, setReselectedJourney] = useState<string>();
+
+  const { data: journeyFlow } = useSWR(
+    selectedJourney === undefined
+      ? null
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow`,
+    jsonFetcher,
+  );
+
+  const nodes = journeyFlow?.nodes;
+  const edges = journeyFlow?.edges;
+
+  return (
+    <div>
+      <select
+        value={selectedJourney}
+        onChange={(event) => setReselectedJourney(event.target.value)}
+      >
+        {((journeyList as string[]) ?? []).map((name, i) => (
+          <option key={i} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <div style={{ height: "90vh", width: "90vw" }}>
+        <ReactFlow nodes={nodes} edges={edges} />
+      </div>
+    </div>
+  );
+};
+
 const Page = ({ selectedPage }: { selectedPage?: (typeof pages)[number] }) => {
   switch (selectedPage) {
     case "manualLogs":
       return <ManualLogs />;
     case "watchLogs":
       return <WatchLogs />;
+    case "flow":
+      return <ReactFlowComp />;
   }
 };
 
@@ -112,7 +155,7 @@ function App() {
   const [open, setOpen] = useState(false);
 
   const [selectedPage, setSelectedPage] =
-    useState<(typeof pages)[number]>("watchLogs");
+    useState<(typeof pages)[number]>("flow");
 
   const toggleDrawer = (newOpen: boolean) => () => {
     setOpen(newOpen);
