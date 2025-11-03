@@ -229,7 +229,7 @@ impl Tree {
                         x: 0.0,
                         y: (idx * 10 + 10) as f32,
                         position: Default::default(),
-                        handle_type: HandleType::Source
+                        handle_type: HandleType::Source,
                     })
                     .collect::<Vec<ReactFlowNodeHandle>>();
 
