@@ -150,7 +150,7 @@ enum HandleType {
 #[derive(Serialize, Default)]
 struct ReactFlowNodeHandle {
     width: Option<f32>,
-    hight: Option<f32>,
+    height: Option<f32>,
     id: Option<String>,
     x: f32,
     y: f32,
