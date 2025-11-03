@@ -1,67 +1,187 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import url('./xy-theme.css');
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
+html,
 body {
   margin: 0;
+  font-family: sans-serif;
+  box-sizing: border-box;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Circle Node */
+
+.react-flow__node-circle {
+  border-radius: 50%;
+  height: 100px;
+  width: 100px;
+  font-family: monospace;
+  text-align: center;
+}
+
+/* Text Input Node */
+
+.react-flow__node-textinput {
+  width: 150px;
+  font-family: monospace;
+  text-align: left;
+}
+
+.text-input-node__input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 5px 0;
+}
+
+/* Annotation Node */
+
+.react-flow__node-annotation {
+  font-size: 16px;
+  width: 200px;
+  color: #683bfa;
+  position: absolute;
+  box-shadow: none;
+  font-family: monospace;
+  text-align: left;
+  background-color: transparent;
+  border: none;
+}
+
+.react-flow__node-annotation .annotation-content {
+  padding: 10px;
   display: flex;
-  min-width: 320px;
-  min-height: 100vh;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.react-flow__node-annotation .annotation-level {
+  margin-right: 4px;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+.react-flow__node-annotation .annotation-arrow {
+  position: absolute;
+  font-size: 24px;
+}
+
+/* Toolbar Node */
+
+.react-flow__node-toolbar {
+  background-color: #000000;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.react-flow__node-toolbar button {
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  background: inherit;
+  border: none;
+  padding: 5px 7px;
+  margin: 3px;
+  border-radius: 50%;
+  box-shadow: var(--xy-node-boxshadow-default);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.react-flow__node-toolbar button:hover {
+  background: #4d4d4d;
+}
+
+/* Resizer Node */
+
+.resizer-node__handles {
+  flex-direction: column !important;
+  display: flex;
+  position: absolute;
+  right: 0;
+  height: 100%;
+  justify-content: space-evenly;
+  top: 0;
+}
+
+.resizer-node__handle {
+  right: 0;
+  transform: none;
+  flex-direction: column;
+}
+
+/* Button Edge */
+
+.button-edge__label {
+  position: absolute;
+  pointer-events: all;
+  transform-origin: center;
+}
+
+.button-edge__button {
+  width: 30px;
+  height: 30px;
+  border: 5px solid #f7f9fb;
+  color: var(--xy-edge-node-color-default);
+  background-color: #f3f3f4;
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 12px;
+  padding-top: 0px;
+}
+
+.button-edge__button:hover {
+  background-color: var(--xy-theme-hover);
+  color: #ffffff;
+}
+
+/* Custom Handles */
+
+.react-flow__handle.custom-handle {
+  background-color: var(--xy-handle-border-color-default);
+  border-radius: 1px;
+  width: 8px;
+  height: 4px;
+  border: none;
+  min-width: 2px;
+  min-height: 2px;
+}
+
+.react-flow__handle.custom-handle:hover,
+.react-flow__handle.custom-handle.connectionindicator:focus,
+.react-flow__handle.custom-handle.connectingfrom,
+.react-flow__handle.custom-handle.connectingto {
+  background-color: var(--xy-theme-edge-hover);
+}
+
+.react-flow__handle-bottom.custom-handle {
+  bottom: -5px;
+  transform: none;
+}
+
+.react-flow__handle-top.custom-handle {
+  top: -5px;
+  transform: none;
+}
+
+.react-flow__handle-left.custom-handle {
+  height: 8px;
+  width: 4px;
+  left: -3px;
+}
+
+/* Minimap */
+
+.react-flow__minimap .group {
+  fill-opacity: 0.4;
+}
+
+.react-flow__minimap .resizer,
+.react-flow__minimap .tools,
+.react-flow__minimap .circle,
+.react-flow__minimap .textinput {
+  fill: rgb(208, 192, 247);
+}
+
+.react-flow__minimap .circle {
+  rx: 100%;
+  ry: 100%;
+}
+
+.react-flow__minimap .annotation {
+  display: none;
 }

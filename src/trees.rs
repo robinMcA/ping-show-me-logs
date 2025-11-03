@@ -106,7 +106,9 @@ impl AuthenticationTreeList {
 
 #[derive(Serialize)]
 enum EdgeType {
+    #[serde(rename = "default")]
     Normal,
+    #[serde(rename = "default")]
     Error,
 }
 
@@ -127,19 +129,52 @@ struct Position {
     y: f32,
 }
 
+#[derive(Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum HandlePosition {
+    Left,
+    #[default]
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum HandleType {
+    #[default]
+    Source,
+    Target,
+}
+
+#[derive(Serialize, Default)]
+struct ReactFlowNodeHandle {
+    width: Option<f32>,
+    hight: Option<f32>,
+    id: Option<String>,
+    x: f32,
+    y: f32,
+    position: HandlePosition,
+    handle_type: HandleType,
+}
+
 #[derive(Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct ReactFlowNode {
     id: String,
     position: Position,
     data: HashMap<String, String>,
+    handles: Option<Vec<ReactFlowNodeHandle>>,
+    source_position: HandlePosition,
+    target_position: HandlePosition
 }
 
 impl Tree {
     pub fn generate_edges(&self) -> Vec<ReactFlowEdge> {
         let start_edge = ReactFlowEdge {
-            id: format!("{}/{}", "start", "ok"),
+            id: "startNode".to_string(),
             edge_type: EdgeType::Normal,
-            source: "start".to_string(),
+            source: "startNode".to_string(),
             target: self.entry_node_id.clone(),
             source_handle: "ok".to_string(),
         };
@@ -168,15 +203,47 @@ impl Tree {
         let static_nodes = self.static_nodes.iter().map(|t| ReactFlowNode {
             id: t.0.to_owned(),
             position: Position { x: t.1.x, y: t.1.y },
-            data: Default::default(),
+            data: HashMap::from([("name".to_string(), t.0.clone())]),
+            handles: Some(vec![ReactFlowNodeHandle {
+                width: None,
+                hight: None,
+                id: Some("ok".to_string()),
+                x: 0.0,
+                y: 0.0,
+                position: Default::default(),
+                handle_type: Default::default(),
+            }]),
+            source_position: HandlePosition::Right,
+            target_position: HandlePosition::Left,
         });
-        let other_nodes = self.nodes.iter().map(|t| ReactFlowNode {
-            id: t.0.to_owned(),
-            position: Position {
-                x: t.1.x.unwrap_or(0.0),
-                y: t.1.y.unwrap_or(0.0),
-            },
-            data: Default::default(),
+
+        let other_nodes = self.nodes.iter().map(|t| {
+            let test =
+                t.1.connections
+                    .keys()
+                    .enumerate()
+                    .map(|(idx, t)| ReactFlowNodeHandle {
+                        width: None,
+                        hight: None,
+                        id: Some(t.to_string()),
+                        x: 0.0,
+                        y: (idx * 10 + 10) as f32,
+                        position: Default::default(),
+                        handle_type: HandleType::Source
+                    })
+                    .collect::<Vec<ReactFlowNodeHandle>>();
+
+            ReactFlowNode {
+                id: t.0.to_owned(),
+                position: Position {
+                    x: t.1.x.unwrap_or(0.0),
+                    y: t.1.y.unwrap_or(0.0),
+                },
+                data: HashMap::from([("name".to_string(), t.1.display_name.clone())]),
+                handles: Some(test),
+                source_position: HandlePosition::Right,
+                target_position: HandlePosition::Left ,
+            }
         });
         static_nodes.chain(other_nodes).collect()
     }
