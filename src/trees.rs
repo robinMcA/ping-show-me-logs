@@ -206,7 +206,7 @@ impl Tree {
             data: HashMap::from([("name".to_string(), t.0.clone())]),
             handles: Some(vec![ReactFlowNodeHandle {
                 width: None,
-                hight: None,
+                height: None,
                 id: Some("ok".to_string()),
                 x: 0.0,
                 y: 0.0,
@@ -224,7 +224,7 @@ impl Tree {
                     .enumerate()
                     .map(|(idx, t)| ReactFlowNodeHandle {
                         width: None,
-                        hight: None,
+                        height: None,
                         id: Some(t.to_string()),
                         x: 0.0,
                         y: (idx * 10 + 10) as f32,
