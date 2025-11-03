@@ -12,6 +12,7 @@ import ListItemText from "@mui/material/ListItemText";
 import { useState } from "react";
 import "./App.css";
 import useSWR, { type Fetcher } from "swr";
+import { PingNode } from "./CustomNodes.tsx";
 import type { Root } from "./types";
 import { ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -32,6 +33,7 @@ const DrawerList = (
       {[
         ["Manual Logs", "manualLogs"],
         ["Watch Logs", "watchLogs"],
+        ["Flow", "flow"],
       ].map(([text, key], index) => (
         <ListItem key={text} disablePadding>
           {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
@@ -104,9 +106,20 @@ const WatchLogs = () => {
   );
 };
 
+const nodeTypes = {
+  ping: PingNode,
+};
+
 const ReactFlowComp = () => {
+  const [startsWith, setStartsWith] = useState<string>("");
+  const [endsWith, setEndsWith] = useState<string>("");
+
+  const urlSearch = new URLSearchParams({
+    starts_with: startsWith,
+    ends_with: endsWith,
+  });
   const { data: journeyList } = useSWR(
-    `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey`,
+    `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
     jsonFetcher,
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
@@ -118,7 +131,25 @@ const ReactFlowComp = () => {
     jsonFetcher,
   );
 
-  const nodes = journeyFlow?.nodes;
+  const nodes = journeyFlow?.nodes.map(
+    (node: { data: { name?: string }; handles: object[] }) => ({
+      ...node,
+      type: "ping",
+      style: {
+        height: Math.max(80, node.handles.length * 20 + 20),
+      },
+      data: {
+        handles: node.handles,
+        name: node.data.name?.startsWith("s")
+          ? node.data.name
+          : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
+            ? "Success"
+            : node.data.name === "e301438c-0bd0-429c-ab0c-66126501069a"
+              ? "Fail"
+              : node.data.name,
+      },
+    }),
+  );
   const edges = journeyFlow?.edges;
 
   return (
@@ -133,8 +164,24 @@ const ReactFlowComp = () => {
           </option>
         ))}
       </select>
+      <label htmlFor="startsWith">Starts With:</label>
+      <input
+        type="text"
+        id="startsWith"
+        name="startsWith"
+        value={startsWith}
+        onChange={(e) => setStartsWith(e.target.value)}
+      />
+      <label htmlFor="endsWith">Ends With:</label>
+      <input
+        type="text"
+        id="endsWith"
+        name="endsWith"
+        value={endsWith}
+        onChange={(e) => setEndsWith(e.target.value)}
+      />
       <div style={{ height: "90vh", width: "90vw" }}>
-        <ReactFlow nodes={nodes} edges={edges} />
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
       </div>
     </div>
   );
