@@ -166,7 +166,7 @@ pub struct ReactFlowNode {
     data: HashMap<String, String>,
     handles: Option<Vec<ReactFlowNodeHandle>>,
     source_position: HandlePosition,
-    target_position: HandlePosition
+    target_position: HandlePosition,
 }
 
 impl Tree {
