@@ -242,7 +242,7 @@ impl Tree {
                 data: HashMap::from([("name".to_string(), t.1.display_name.clone())]),
                 handles: Some(test),
                 source_position: HandlePosition::Right,
-                target_position: HandlePosition::Left ,
+                target_position: HandlePosition::Left,
             }
         });
         static_nodes.chain(other_nodes).collect()
