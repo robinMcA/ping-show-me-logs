@@ -159,7 +159,7 @@ struct ReactFlowNodeHandle {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ReactFlowNode {
     id: String,
     position: Position,
