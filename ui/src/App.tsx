@@ -140,6 +140,7 @@ const ReactFlowComp = () => {
       },
       data: {
         handles: node.handles,
+        ...node.data,
         name: node.data.name?.startsWith("s")
           ? node.data.name
           : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"

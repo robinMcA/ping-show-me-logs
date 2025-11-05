@@ -1,16 +1,22 @@
+use crate::token::Token;
 use crate::trees::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
+use actix_web::rt::time::sleep;
 use actix_web::web::Query;
 use actix_web::{
-  error, get, mime, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
+  error, get, mime, post, rt, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
+use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
+use futures_util::StreamExt as _;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env::VarError;
+use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
+use std::time::Duration;
 use thiserror::Error;
 
 mod token;
@@ -40,6 +46,8 @@ enum ShowMeErrors {
   TokenCreateToken(#[from] jsonwebkey::Error),
   #[error("Failed to create and encode the token")]
   TokenCreateKey(#[from] jsonwebtoken::errors::Error),
+  #[error("Actix Web Error")]
+  ActixWs(#[from] actix_web::Error),
 }
 
 impl error::ResponseError for ShowMeErrors {
@@ -57,10 +65,13 @@ impl error::ResponseError for ShowMeErrors {
   }
 }
 
-#[derive(Debug)]
 struct AppMutState {
   transaction_id: Mutex<String>,
   authentication_tree: AuthenticationTreeList,
+  token: Token,
+  sec: String,
+  key: String,
+  log: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -200,6 +211,7 @@ async fn get_journey(
   let sw = query.starts_with.clone().unwrap_or_default();
   let ew = query.ends_with.clone().unwrap_or_default();
   let cont = query.contains.clone().unwrap_or_default();
+
   let tree_list = data
     .authentication_tree
     .get_tree_list()
@@ -242,22 +254,39 @@ async fn journey_flow(
   name: web::Path<String>,
   data: web::Data<AppMutState>,
 ) -> Result<web::Json<FlowPayload>, ShowMeErrors> {
-
   let tree = data.authentication_tree.get_tree(&name.into_inner());
 
   match tree {
-    None => {
-      Err(ShowMeErrors::NoLogsFound("ToDo: Make a real error".to_string()))
-    }
-    Some(tree_jouney) => {
-      Ok(web::Json(FlowPayload{
-        nodes: tree_jouney.generate_nodes(),
-        edges: tree_jouney.generate_edges()
-      }))
-    }
+    None => Err(ShowMeErrors::NoLogsFound(
+      "ToDo: Make a real error".to_string(),
+    )),
+    Some(tree_jouney) => Ok(web::Json(FlowPayload {
+      nodes: tree_jouney.generate_nodes(),
+      edges: tree_jouney.generate_edges(),
+    })),
   }
+}
 
+#[get("/journey/{name}/scripts")]
+async fn journey_script(
+  name: web::Path<String>,
+  data: web::Data<AppMutState>,
+) -> Result<web::Json<FlowPayload>, ShowMeErrors> {
+  let client = Client::new();
 
+  let url = format!(
+    "{}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/nodes/ScriptedDecisionDone/{}",
+    &data.token.dom, name
+  );
+
+  let token = format!("Bearer {}",  &data.token.token_string.lock().await.deref());
+
+  let scripts  = &client.get(url).header("authorization", token).send().await?.bytes().await?;
+
+  Ok(web::Json(FlowPayload {
+    nodes: vec![],
+    edges: vec![],
+  }))
 }
 
 #[get("/logs/watch")]
@@ -334,19 +363,101 @@ async fn index(req: HttpRequest) -> Result<HttpResponse, ShowMeErrors> {
     _ => HttpResponse::NotFound().body(""),
   })
 }
+async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, ShowMeErrors> {
+  let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
+
+  let mut s2 = session.clone();
+  let mut stream = stream
+    .aggregate_continuations()
+    // aggregate continuation frames up to 1MiB
+    .max_continuation_size(2_usize.pow(20));
+  rt::spawn(async move {
+    loop {
+      s2.text("booo").await.unwrap();
+      sleep(Duration::from_secs(2)).await
+    }
+  });
+
+  // start task but don't wait for it
+  rt::spawn(async move {
+    // receive messages from websocket
+    while let Some(msg) = stream.next().await {
+      match msg {
+        Ok(AggregatedMessage::Text(text)) => {
+          // echo text message
+          session.text(text).await.unwrap();
+        }
+
+        Ok(AggregatedMessage::Binary(bin)) => {
+          // echo binary message
+          session.binary(bin).await.unwrap();
+        }
+
+        Ok(AggregatedMessage::Ping(msg)) => {
+          // respond to PING frame with PONG frame
+          session.pong(&msg).await.unwrap();
+        }
+
+        _ => {}
+      }
+    }
+  });
+
+  // respond immediately with response connected to WS session
+  Ok(res)
+}
+
+#[get("/idm")]
+async fn idm(data: web::Data<AppMutState>) -> Result<String, ShowMeErrors> {
+  let client = Client::new();
+  let metrics = &*client
+    .get(format!("{}/monitoring/prometheus/idm", &data.token.dom,))
+    .header("x-api-key", &data.key)
+    .header("x-api-secret", &data.sec)
+    .send()
+    .await?
+    .text()
+    .await?;
+
+  Ok(metrics.to_string())
+}
+
+#[get("/am")]
+async fn am(data: web::Data<AppMutState>) -> Result<String, ShowMeErrors> {
+  let client = Client::new();
+  let metrics = client
+    .get(format!("{}/monitoring/prometheus/am", &data.token.dom,))
+    .header("x-api-key", &data.key)
+    .header("x-api-secret", &data.sec)
+    .send()
+    .await?
+    .text()
+    .await?;
+
+  Ok(metrics.to_string())
+}
 
 #[actix_web::main]
 async fn main() -> Result<(), ShowMeErrors> {
-  let token = token::Token::new().await?;
+  let mut token = Token::new().await?;
 
   let client = Client::new();
-  let token_str = Arc::clone(&token.token_string);
 
-  let authentication_tree: AuthenticationTreeList = serde_json::from_slice(&*client.get(format!("{}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/trees?_queryFilter=true", token.dom, )).header("authorization", format!("Bearer {}", token_str)).send().await?.bytes().await?)?;
+  // ToDo - If this was a Arc<Mutex> it would not need the be &mut
+  let token_str = token.get_usable_token().await;
 
+  let authentication_tree: AuthenticationTreeList = serde_json::from_slice(&client.get(format!("{}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/trees?_queryFilter=true", token.dom, )).header("authorization", format!("Bearer {}", token_str)).send().await?.bytes().await?)?;
+
+  let url = std::env::var("SANDBOX")?;
+  let key = std::env::var("PING_KEY")?;
+  let sec = std::env::var("PING_SEC")?;
   let state = web::Data::new(AppMutState {
     transaction_id: Mutex::new(String::new()),
     authentication_tree,
+    token,
+    sec,
+    key,
+    log: url,
   });
 
   HttpServer::new(move || {
@@ -360,7 +471,9 @@ async fn main() -> Result<(), ShowMeErrors> {
           .service(logs)
           .service(set_watch)
           .service(journey_flow)
-          .service(get_journey),
+          .service(get_journey)
+          .route("/echo", web::get().to(echo))
+          .service(web::scope("/monitoring").service(am).service(idm)),
       )
       .route("/{filename:.*}", web::get().to(index))
   })

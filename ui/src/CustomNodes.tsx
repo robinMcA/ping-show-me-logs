@@ -1,6 +1,9 @@
 import { Handle, type NodeProps, Position, type Node } from "@xyflow/react";
 
-export type PingNode = Node<{ handles: Array<Handle>; name?: string }, "ping">;
+export type PingNode = Node<
+  { handles: Array<Handle>; name?: string; type?: string },
+  "ping"
+>;
 
 export const PingNode = ({ data }: NodeProps<PingNode>) => {
   const handles = data.handles as Array<Handle>;
@@ -30,6 +33,7 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
         ))}
       </div>
       <div>{data?.name ?? "ToDo"}</div>
+      <div>{data?.type ?? "ToDo"}</div>
     </>
   );
 };

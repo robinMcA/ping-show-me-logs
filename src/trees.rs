@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize,Serialize,  Debug, Clone)]
 pub enum NodeType {
     AccountLockoutNode,
     AgentDataStoreDecisionNode,
@@ -239,7 +239,9 @@ impl Tree {
                     x: t.1.x.unwrap_or(0.0),
                     y: t.1.y.unwrap_or(0.0),
                 },
-                data: HashMap::from([("name".to_string(), t.1.display_name.clone())]),
+                data: HashMap::from([("name".to_string(), t.1.display_name.clone()), (
+                  "type".to_string(), serde_json::to_string(&t.1.node_type).unwrap_or("ToDo better".to_string())
+                  )]),
                 handles: Some(test),
                 source_position: HandlePosition::Right,
                 target_position: HandlePosition::Left ,
