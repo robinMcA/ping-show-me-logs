@@ -1,11 +1,11 @@
 use crate::token::Token;
 use crate::trees::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
-use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
+use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
 use actix_web::{
-  error, get, mime, post, rt, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
+  App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, mime, post, rt, web,
 };
 use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
@@ -125,10 +125,21 @@ impl Logs {
   }
 }
 
-async fn get_logs(client: &Client, transaction_id: &str) -> Result<Logs, ShowMeErrors> {
+async fn get_logs(
+  client: &Client,
+  transaction_id: &str,
+  query_filter: Option<&str>,
+) -> Result<Logs, ShowMeErrors> {
   let params = [
     ("source", "am-everything"),
     ("transactionId", transaction_id),
+    (
+      "_queryFilter",
+      match query_filter {
+        Some(filter_string) => filter_string,
+        None => "",
+      },
+    ),
   ];
 
   let url = std::env::var("SANDBOX")?;
@@ -174,7 +185,7 @@ async fn logs(
   query: Query<LogsRequest>,
 ) -> Result<web::Json<Logs>, ShowMeErrors> {
   let id = fr_id.into_inner();
-  match get_logs(&Client::new(), &id).await {
+  match get_logs(&Client::new(), &id, None).await {
     Ok(ll) => Ok(match query.filters.clone() {
       None => web::Json(ll),
       Some(filter) => match filter {
@@ -187,6 +198,42 @@ async fn logs(
     Err(err) => {
       println!("{}", err);
       Err(ShowMeErrors::NoLogsFound(id))
+    }
+  }
+}
+
+#[derive(Deserialize)]
+struct ScriptLogs {
+  fr_id: String,
+  script_id: String,
+}
+
+#[get("/logs/{fr_id}/script/{script_id}")]
+async fn script_logs(
+  path: web::Path<ScriptLogs>,
+  query: Query<LogsRequest>,
+) -> Result<web::Json<Logs>, ShowMeErrors> {
+  let formatted_query = format!(
+    "/payload/logger sw \"scripts.AUTHENTICATION_TREE_DECISION_NODE.{}\"",
+    path.script_id
+  );
+
+  let query_filter = Some(formatted_query.as_str());
+
+  println!("{:?} {:?}", formatted_query, path.fr_id);
+  match get_logs(&Client::new(), &path.fr_id, query_filter).await {
+    Ok(ll) => Ok(match query.filters.clone() {
+      None => web::Json(ll),
+      Some(filter) => match filter {
+        Filters::Warn => web::Json(ll.filter_logs(Level::Warning)),
+        Filters::Error => web::Json(ll.filter_logs(Level::Error)),
+        Filters::Debug => web::Json(ll.filter_logs(Level::Debug)),
+        _ => web::Json(ll),
+      },
+    }),
+    Err(err) => {
+      println!("{}", err);
+      Err(ShowMeErrors::NoLogsFound(path.fr_id.clone()))
     }
   }
 }
@@ -295,7 +342,7 @@ async fn get_watch(
   query: Query<LogsRequest>,
 ) -> Result<web::Json<Logs>, ShowMeErrors> {
   Ok(match data.transaction_id.lock() {
-    Ok(id) => match get_logs(&Client::new(), &*id).await {
+    Ok(id) => match get_logs(&Client::new(), &*id, None).await {
       Ok(ll) => match query.filters.clone() {
         None => web::Json(ll),
         Some(filter) => match filter {
@@ -469,6 +516,7 @@ async fn main() -> Result<(), ShowMeErrors> {
         web::scope("/api")
           .service(get_watch)
           .service(logs)
+          .service(script_logs)
           .service(set_watch)
           .service(journey_flow)
           .service(get_journey)
