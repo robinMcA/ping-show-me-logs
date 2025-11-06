@@ -1,6 +1,7 @@
 use crate::ShowMeErrors;
+use futures_util::lock::Mutex;
 use jsonwebkey::JsonWebKey;
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use openssl::base64;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,7 +9,7 @@ use std::fs;
 use std::ops::Add;
 use std::sync::Arc;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone)]
 struct Payload {
     iss: String,
     sub: String,
@@ -17,19 +18,17 @@ struct Payload {
     jti: String,
 }
 
-impl Payload {
-    fn update_exp(&mut self, exp: i64) {
-        self.exp = exp;
-    }
+fn update_exp(payload: Payload, exp: i64) -> Payload {
+    Payload { exp, ..payload }
 }
 
 pub struct Token {
-    pub token_string: Arc<String>,
+    pub token_string: Arc<Mutex<String>>,
     pub exp_date: i64,
-    payload: Payload,
+    payload: Mutex<Payload>,
     key: EncodingKey,
     aud: String,
-    pub dom: String
+    pub dom: String,
 }
 
 #[derive(Deserialize)]
@@ -48,8 +47,11 @@ const GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 const SCOPE: &str = "fr:idm:* fr:am:*";
 const AUD_PART: &str = "am/oauth2/access_token";
 
-
-async fn token_exchange(payload: &Payload,aud: &str, key: &jsonwebtoken::EncodingKey) -> Result<String, ShowMeErrors> {
+async fn token_exchange(
+    payload: &Payload,
+    aud: &str,
+    key: &jsonwebtoken::EncodingKey,
+) -> Result<String, ShowMeErrors> {
     let header = Header {
         alg: Algorithm::RS256,
         ..Default::default()
@@ -65,20 +67,20 @@ async fn token_exchange(payload: &Payload,aud: &str, key: &jsonwebtoken::Encodin
 
     let token: TokenResponse = serde_json::from_slice(
         &*client
-          .post(aud)
-          .form(&token_data)
-          .send()
-          .await?
-          .bytes()
-          .await?,
+            .post(aud)
+            .form(&token_data)
+            .send()
+            .await?
+            .bytes()
+            .await?,
     )?;
 
     Ok(token.access_token)
 }
 
-
 impl Token {
-    fn new_or_update_exp(&self) -> (bool,i64) {
+    // ToDo this fn is a little silly.
+    fn new_or_update_exp(&self) -> (bool, i64) {
         let cur = self.exp_date;
 
         let now = chrono::Utc::now().timestamp();
@@ -89,15 +91,26 @@ impl Token {
         }
     }
 
-    pub async fn get_usable_token(&mut self) -> Arc<String> {
+    pub async fn get_usable_token(&mut self) -> String {
         let (need_new_exp, exp) = self.new_or_update_exp();
+        let mut locked_string = self.token_string.lock().await;
         if need_new_exp {
-            Arc::clone(&self.token_string)
+            locked_string.to_string()
         } else {
-            self.payload.update_exp(exp);
-            let token = token_exchange(&self.payload, &*self.aud, &self.key).await.unwrap_or(self.token_string.to_string());
-            self.token_string = Arc::new(token);
-            Arc::clone(&self.token_string)
+            let old_payload = self.payload.get_mut();
+
+            let new_payload = update_exp(old_payload.clone(), exp);
+
+            let token = token_exchange(&new_payload, &*self.aud, &self.key)
+              .await.unwrap_or_default();
+
+            *old_payload = new_payload;
+
+
+            locked_string.clear();
+           locked_string.push_str(&*token) ;
+
+            token
         }
     }
 
@@ -121,8 +134,9 @@ impl Token {
             jti,
         };
 
-        let key =
-            JsonWebKey::from_slice(fs::read_to_string(std::env::var("KEY_FILE")?)?)?.key.to_encoding_key();
+        let key = JsonWebKey::from_slice(fs::read_to_string(std::env::var("KEY_FILE")?)?)?
+            .key
+            .to_encoding_key();
 
         let header = Header {
             alg: Algorithm::RS256,
@@ -148,12 +162,12 @@ impl Token {
         )?;
 
         Ok(Self {
-            token_string: Arc::new(token.access_token),
+            token_string: Arc::new(Mutex::from(token.access_token)),
             exp_date: exp,
-            payload,
+            payload: Mutex::from(payload),
             key,
             aud,
-            dom
+            dom,
         })
     }
 }
