@@ -1,5 +1,4 @@
 use crate::token::Token;
-use crate::trees::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use actix_web::http::StatusCode;
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
@@ -18,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use thiserror::Error;
+use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 
 mod token;
 mod trees;
@@ -420,7 +420,7 @@ async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Sh
     .max_continuation_size(2_usize.pow(20));
   rt::spawn(async move {
     loop {
-      s2.text("booo").await.unwrap();
+      s2.text(format!("booo    {}", chrono::Utc::now().timestamp())).await.unwrap();
       sleep(Duration::from_secs(2)).await
     }
   });
