@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
 use crate::NodeOutcomeEdge;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
