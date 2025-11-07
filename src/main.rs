@@ -1,4 +1,7 @@
-use crate::token::Token;
+use crate::errors::ShowMeErrors;
+use crate::token::{get_usable_token, Token};
+use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
+use crate::trees::nodes::{NodeConfig, NodeData};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
@@ -7,25 +10,24 @@ use actix_web::{
 };
 use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
-use futures_util::StreamExt as _;
+use futures_util::{StreamExt as _, TryFutureExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crate::errors::ShowMeErrors;
-use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 
+mod errors;
 mod token;
 mod trees;
-mod errors;
-
 
 struct AppMutState {
   transaction_id: Mutex<String>,
   authentication_tree: AuthenticationTreeList,
   token: Token,
+  token_str: Mutex<String>,
+  payload: Mutex<token::Payload>,
   sec: String,
   key: String,
   log: String,
@@ -275,22 +277,18 @@ async fn journey_flow(
 async fn journey_script(
   name: web::Path<String>,
   data: web::Data<AppMutState>,
-) -> Result<web::Json<FlowPayload>, ShowMeErrors> {
-  let client = Client::new();
+) -> Result<web::Json<Vec<(NodeConfig, NodeData)>>, ShowMeErrors> {
+  let (token_str, payload) = get_usable_token(&data.token, &data.payload, &data.token_str).await?;
 
-  let url = format!(
-    "{}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/nodes/ScriptedDecisionDone/{}",
-    &data.token.dom, name
-  );
+  let dom = &data.token.dom;
+  let tree = data
+    .authentication_tree
+    .get_tree(&name.into_inner())
+    .unwrap()
+    .get_node_info(dom, &token_str)
+    .await?;
 
-  let token = format!("Bearer {}",  &data.token.token_string.lock().await.deref());
-
-  let scripts  = &client.get(url).header("authorization", token).send().await?.bytes().await?;
-
-  Ok(web::Json(FlowPayload {
-    nodes: vec![],
-    edges: vec![],
-  }))
+  Ok(web::Json(tree))
 }
 
 #[get("/logs/watch")]
@@ -377,7 +375,9 @@ async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Sh
     .max_continuation_size(2_usize.pow(20));
   rt::spawn(async move {
     loop {
-      s2.text(format!("booo    {}", chrono::Utc::now().timestamp())).await.unwrap();
+      s2.text(format!("booo    {}", chrono::Utc::now().timestamp()))
+        .await
+        .unwrap();
       sleep(Duration::from_secs(2)).await
     }
   });
@@ -443,12 +443,14 @@ async fn am(data: web::Data<AppMutState>) -> Result<String, ShowMeErrors> {
 
 #[actix_web::main]
 async fn main() -> Result<(), ShowMeErrors> {
-  let mut token = Token::new().await?;
+  let (token, payload_init) = Token::new().await?;
+  let payload_mux_init = Mutex::new(payload_init);
 
   let client = Client::new();
+  let token_mux = Mutex::new("".to_string());
 
   // ToDo - If this was a Arc<Mutex> it would not need the be &mut
-  let token_str = token.get_usable_token().await;
+  let (token_str, payload_up) = get_usable_token(&token, &payload_mux_init, &token_mux).await?;
 
   let authentication_tree: AuthenticationTreeList = serde_json::from_slice(&client.get(format!("{}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/trees?_queryFilter=true", token.dom, )).header("authorization", format!("Bearer {}", token_str)).send().await?.bytes().await?)?;
 
@@ -459,6 +461,8 @@ async fn main() -> Result<(), ShowMeErrors> {
     transaction_id: Mutex::new(String::new()),
     authentication_tree,
     token,
+    token_str: token_mux,
+    payload: Mutex::new(payload_up),
     sec,
     key,
     log: url,
@@ -476,14 +480,15 @@ async fn main() -> Result<(), ShowMeErrors> {
           .service(script_logs)
           .service(set_watch)
           .service(journey_flow)
+          .service(journey_script)
           .service(get_journey)
           .route("/echo", web::get().to(echo))
           .service(web::scope("/monitoring").service(am).service(idm)),
       )
       .route("/{filename:.*}", web::get().to(index))
   })
-    .bind(("0.0.0.0", 8081))?
-    .run()
-    .await?;
+  .bind(("0.0.0.0", 8081))?
+  .run()
+  .await?;
   Ok(())
 }
