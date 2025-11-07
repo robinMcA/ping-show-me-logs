@@ -61,13 +61,13 @@ pub async fn node_id_to_script_config(
 ) -> Result<(NodeConfig, NodeData), ShowMeErrors> {
   let client = Client::new();
 
-  let config_txt = &client.get(format!("{dom}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/nodes/{node_type}/{node_id}")).header("authorization", format!("Bearer {}", token_str)).send().await?.text()
+  let config_txt = &client.get(format!("{dom}/am/json/realms/root/realms/alpha/realm-config/authentication/authenticationtrees/nodes/{node_type}/{node_id}")).header("authorization", format!("Bearer {}", token_str)).send().await?.bytes()
     .await.map_err(|e| {
     dbg!(e);
    ShowMeErrors::NoLogsFound("".to_string())
   })?;
-  dbg!(config_txt);
-  let script_config: ScriptConfig = serde_json::from_str(config_txt)?;
+
+  let script_config: ScriptConfig = serde_json::from_slice(config_txt)?;
 
   let script_id = &script_config.script;
 
@@ -76,12 +76,11 @@ pub async fn node_id_to_script_config(
     .header("authorization", format!("Bearer {}", token_str))
     .send()
     .await?
-    .text()
+    .bytes()
     .await?;
 
-  dbg!(script_txt);
 
-  let script_data: Script = serde_json::from_str(script_txt)?;
+  let script_data: Script = serde_json::from_slice(script_txt)?;
 
 
   Ok((
