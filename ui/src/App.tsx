@@ -28,7 +28,7 @@ const doubleFetcher = (base: string) =>
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void
+  togglePage: (pageKey: (typeof pages)[number]) => void,
 ) => (
   <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
     <List>
@@ -59,7 +59,7 @@ const ManualLogs = () => {
     frRequestId === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher
+    simpleJsonFetcher,
   );
   return (
     <>
@@ -84,7 +84,7 @@ const WatchLogs = () => {
   const [watching, setWatching] = useState<string>("Error");
   const { data: watchData } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher
+    simpleJsonFetcher,
   );
   return (
     <>
@@ -122,15 +122,15 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher
+    jsonFetcher,
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
   const [selectedNode, setSelectedNode] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [transactionId, setTransactionId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
 
   useOnSelectionChange({
@@ -149,7 +149,7 @@ const ReactFlowComp = () => {
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow${transactionId !== undefined ? `?transaction_id=${transactionId}` : ""}`,
-    jsonFetcher
+    jsonFetcher,
   );
 
   const { data: journeyTransactions } = useSWR(
@@ -162,58 +162,53 @@ const ReactFlowComp = () => {
           data: {
             transaction_id: string;
             timestamp: string;
-          }[]
+          }[],
         ) => [
           ...new Set(
             data
               .sort(({ timestamp: timestampA }, { timestamp: timestampB }) =>
-                timestampA > timestampB ? 1 : -1
+                timestampA > timestampB ? 1 : -1,
               )
               .map(({ transaction_id }) =>
-                transaction_id.split("-request")[0].replace(/\/\d/gu, "")
-              )
+                transaction_id.split("-request")[0].replace(/\/\d/gu, ""),
+              ),
           ),
-        ]
-      )
+        ],
+      ),
   );
 
   const { data: journeyScripts } = useSWR(
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/scripts`,
-    jsonFetcher
+    jsonFetcher,
   );
 
   console.info({ journeyScripts });
 
-  // const { data: scriptLogs } = useSWR(
-  //   journeyScripts === null || selectedNode === undefined
-  //     ? null
-  //     : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs`,
-  //   jsonFetcher
-  // );
-
-  const nodes = journeyFlow?.nodes.map(
-    (node: { id: string; data: { name?: string }; handles: object[] }) => ({
-      ...node,
-      type: "ping",
-      style: {
-        height: Math.max(80, node.handles.length * 20 + 20),
-      },
-      data: {
-        handles: node.handles,
-        ...node.data,
-        scriptContent: journeyScripts[node.id] ?? [{}, { script: "" }],
-        name: node.data.name?.startsWith("s")
-          ? node.data.name
-          : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
-            ? "Success"
-            : node.data.name === "e301438c-0bd0-429c-ab0c-66126501069a"
-              ? "Fail"
-              : node.data.name,
-      },
-    })
-  );
+  const nodes =
+    journeyScripts &&
+    journeyFlow?.nodes.map(
+      (node: { id: string; data: { name?: string }; handles: object[] }) => ({
+        ...node,
+        type: "ping",
+        style: {
+          height: Math.max(80, node.handles.length * 20 + 20),
+        },
+        data: {
+          handles: node.handles,
+          ...node.data,
+          scriptContent: journeyScripts[node.id] ?? [{}, { script: "" }],
+          name: node.data.name?.startsWith("s")
+            ? node.data.name
+            : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
+              ? "Success"
+              : node.data.name === "e301438c-0bd0-429c-ab0c-66126501069a"
+                ? "Fail"
+                : node.data.name,
+        },
+      }),
+    );
 
   const edges = journeyFlow?.edges;
 
