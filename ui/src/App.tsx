@@ -16,6 +16,7 @@ import { PingNode } from "./CustomNodes.tsx";
 import type { Root } from "./types";
 import { ReactFlow, useOnSelectionChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Log } from "./Logs.tsx";
 
 const pages = ["manualLogs", "watchLogs", "flow"] as const;
 
@@ -139,7 +140,7 @@ const ReactFlowComp = () => {
         return;
       }
 
-      setSelectedNode(node.data.id as string);
+      setSelectedNode(node.id as string);
     },
   });
 
@@ -184,29 +185,36 @@ const ReactFlowComp = () => {
 
   console.info({ journeyScripts });
 
-  const nodes =
-    journeyScripts &&
-    journeyFlow?.nodes.map(
-      (node: { id: string; data: { name?: string }; handles: object[] }) => ({
-        ...node,
-        type: "ping",
-        style: {
-          height: Math.max(80, node.handles.length * 20 + 20),
-        },
-        data: {
-          handles: node.handles,
-          ...node.data,
-          scriptContent: journeyScripts[node.id] ?? [{}, { script: "" }],
-          name: node.data.name?.startsWith("s")
-            ? node.data.name
-            : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
-              ? "Success"
-              : node.data.name === "e301438c-0bd0-429c-ab0c-66126501069a"
-                ? "Fail"
-                : node.data.name,
-        },
-      }),
-    );
+  const { data: scriptLogs } = useSWR(
+    !journeyScripts || !selectedNode || !transactionId
+      ? null
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${transactionId}?script_id=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?._id}&node_id=${selectedNode}`,
+    jsonFetcher
+  );
+
+  console.info(scriptLogs);
+
+  const nodes = journeyFlow?.nodes.map(
+    (node: { id: string; data: { name?: string }; handles: object[] }) => ({
+      ...node,
+      type: "ping",
+      style: {
+        height: Math.max(80, node.handles.length * 20 + 20),
+      },
+      data: {
+        handles: node.handles,
+        ...node.data,
+        scriptContent: journeyScripts?.[node.id] ?? [{}, { script: "" }],
+        name: node.data.name?.startsWith("s")
+          ? node.data.name
+          : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
+            ? "Success"
+            : node.data.name === "e301438c-0bd0-429c-ab0c-66126501069a"
+              ? "Fail"
+              : node.data.name,
+      },
+    })
+  );
 
   const edges = journeyFlow?.edges.map((e: any) => ({
     ...e,
@@ -232,11 +240,17 @@ const ReactFlowComp = () => {
             </option>
           ))}
         </select>
-        {selectedNode !== undefined ? (
-          <p>Select a node to view its logs.</p>
-        ) : (
-          <p></p>
-        )}
+        <div style={{ padding: "30px" }}>
+          {scriptLogs &&
+            scriptLogs.result
+              .filter(
+                (res: unknown) =>
+                  !JSON.stringify(res).includes("Unknown outcome")
+              )
+              .map((log: { payload: Record<string, unknown> }, ix: number) => (
+                <Log key={ix} data={log.payload} />
+              ))}
+        </div>
       </div>
       <div>
         <select
@@ -266,7 +280,9 @@ const ReactFlowComp = () => {
           onChange={(e) => setEndsWith(e.target.value)}
         />
         <div style={{ height: "90vh", width: "90vw" }}>
-          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
+          {journeyScripts && (
+            <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
+          )}
         </div>
       </div>
     </div>
