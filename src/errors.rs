@@ -29,6 +29,8 @@ pub enum ShowMeErrors {
   TokenCreateKey(#[from] jsonwebtoken::errors::Error),
   #[error("Actix Web Error")]
   ActixWs(#[from] actix_web::Error),
+  #[error("Actix Web Connection Closed")]
+  ActixWsClosed(#[from] actix_ws::Closed),
 }
 
 impl error::ResponseError for ShowMeErrors {

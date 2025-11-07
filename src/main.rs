@@ -6,7 +6,7 @@ use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, mime, post, rt, web};
-use actix_ws::AggregatedMessage;
+use actix_ws::{AggregatedMessage, Session};
 use chrono::{DateTime, Utc};
 use futures_util::{StreamExt as _, TryFutureExt};
 use reqwest::Client;
@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, LockResult, Mutex, mpsc};
 use std::time::Duration;
 
 mod errors;
@@ -25,11 +26,13 @@ struct AppMutState {
   transaction_id: Mutex<String>,
   authentication_tree: AuthenticationTreeList,
   token: Token,
+  // ToDo read the doc to see if this is silly to have a
   token_str: Mutex<String>,
   payload: Mutex<token::Payload>,
   sec: String,
   key: String,
   log: String,
+  ws: Mutex<Vec<Session>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -488,22 +491,25 @@ async fn index(req: HttpRequest) -> Result<HttpResponse, ShowMeErrors> {
     _ => HttpResponse::NotFound().body(""),
   })
 }
-async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, ShowMeErrors> {
+async fn echo(
+  req: HttpRequest,
+  stream: web::Payload,
+  data: web::Data<AppMutState>,
+) -> Result<HttpResponse, ShowMeErrors> {
   let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
+
+  match data.ws.lock() {
+    Ok(mut ws) => ws.push(session.clone()),
+    Err(_) => {
+      println!("Failed to lock ws")
+    }
+  };
 
   let mut s2 = session.clone();
   let mut stream = stream
     .aggregate_continuations()
     // aggregate continuation frames up to 1MiB
     .max_continuation_size(2_usize.pow(20));
-  rt::spawn(async move {
-    loop {
-      s2.text(format!("booo    {}", chrono::Utc::now().timestamp()))
-        .await
-        .unwrap();
-      sleep(Duration::from_secs(2)).await
-    }
-  });
 
   // start task but don't wait for it
   rt::spawn(async move {
@@ -589,6 +595,40 @@ async fn main() -> Result<(), ShowMeErrors> {
     sec,
     key,
     log: url,
+    ws: Mutex::new(vec![]),
+  });
+
+  let watcher_state = state.clone();
+
+  rt::spawn(async move {
+    loop {
+      while watcher_state.ws.lock().unwrap().is_empty() {
+        println!("ws is still none");
+        dbg!(watcher_state.ws.lock().unwrap().is_empty());
+        sleep(Duration::from_secs(4)).await;
+      }
+      let s2 = (*watcher_state.ws.lock().unwrap()).clone();
+      loop {
+        match s2
+          .clone()
+          .iter()
+          .cloned()
+          .enumerate()
+          .collect::<Vec<(usize, Session)>>()
+          .first()
+        {
+          Some((i, x)) => x
+            .clone()
+            .text(format!("booo {i}   {}", Utc::now().timestamp()))
+            .await
+            .map_err(ShowMeErrors::ActixWsClosed)?,
+          None => println!("session vec is empty."),
+        }
+        sleep(Duration::from_secs(2)).await;
+      }
+    }
+
+    Ok::<(), ShowMeErrors>(())
   });
 
   HttpServer::new(move || {
