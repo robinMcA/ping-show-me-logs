@@ -1,10 +1,9 @@
 use crate::errors::ShowMeErrors;
-use crate::token::Token;
-use crate::trees::journeys::{AuthenticationTreeList, NodeType, Tree};
+use crate::trees::journeys::NodeType;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
 
 #[derive(Deserialize, Serialize, Clone)]
 struct NodeConfigType {
