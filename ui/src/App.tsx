@@ -23,8 +23,6 @@ const simpleJsonFetcher: Fetcher<Root, string> = (url: string) =>
   fetch(url).then((r) => r.json());
 
 const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
-const doubleFetcher = (base: string) =>
-  Promise.all([`${base}/flow`, `${base}/scripts`].map(jsonFetcher));
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
@@ -210,7 +208,16 @@ const ReactFlowComp = () => {
       }),
     );
 
-  const edges = journeyFlow?.edges;
+  const edges = journeyFlow?.edges.map((e: any) => ({
+    ...e,
+    markerEnd: "arrow",
+    type: "simplebezier",
+    animated: e.style.stroke !== "grey",
+    style: {
+      ...e.style,
+      strokeWidth: e.style.stroke !== "grey" ? 10 : undefined,
+    },
+  }));
 
   return (
     <div style={{ display: "flex", flexDirection: "row" }}>

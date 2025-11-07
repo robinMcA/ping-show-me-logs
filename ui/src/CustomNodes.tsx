@@ -40,14 +40,13 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
       <Modal onClose={handleClose} open={isOpen}>
         <Box sx={style}>
           {displayString.map((line, i) => (
-            <Typography
-              style={{ marginTop: 0 }}
+            <p
+              style={{ marginTop: 0, marginBottom: 0, whiteSpace: "pre" }}
               key={i}
               id="modal-modal-description"
-              sx={{ mt: 2 }}
             >
-              {line}
-            </Typography>
+              {`        ${line}`}
+            </p>
           ))}
         </Box>
       </Modal>
