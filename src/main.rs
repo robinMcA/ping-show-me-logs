@@ -2,14 +2,11 @@ use crate::errors::ShowMeErrors;
 use crate::token::{get_usable_token, Token};
 use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use crate::trees::nodes::{NodeConfig, NodeData};
-use crate::errors::ShowMeErrors;
-use crate::token::Token;
-use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
 use actix_web::{
-  App, HttpRequest, HttpResponse, HttpServer, Responder, error, get, mime, post, rt, web,
+  get, mime, post, rt, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
@@ -18,7 +15,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
 
 mod errors;
