@@ -1,4 +1,6 @@
+use crate::errors::ShowMeErrors;
 use crate::token::Token;
+use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
@@ -14,13 +16,10 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use crate::errors::ShowMeErrors;
-use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 
+mod errors;
 mod token;
 mod trees;
-mod errors;
-
 
 struct AppMutState {
   transaction_id: Mutex<String>,
@@ -291,12 +290,61 @@ struct FlowPayload {
   edges: Vec<ReactFlowEdge>,
 }
 
+#[derive(Debug)]
+struct NodeOutcomeEdge {
+  name: String,
+  outcome: String,
+}
+
+async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>, ShowMeErrors> {
+  match get_logs(
+    &Client::new(),
+    &transaction_id,
+    Some("/payload/entries/info/nodeOutcome pr"),
+  )
+  .await
+  {
+    Ok(ll) => Ok(
+      ll.result
+        .iter()
+        .map(|log| {
+          let payload = log.payload.entries.clone().unwrap_or(vec![])[0]
+            .info
+            .clone();
+
+          let outcome = payload.node_outcome;
+          let name = payload.display_name;
+
+          NodeOutcomeEdge { name, outcome }
+        })
+        .collect(),
+    ),
+    Err(err) => {
+      println!("{}", err);
+      Err(ShowMeErrors::NoLogsFound(transaction_id.to_string()))
+    }
+  }
+}
+
+#[derive(Deserialize)]
+struct JourneyFlowQuery {
+  transaction_id: Option<String>,
+}
+
 #[get("/journey/{name}/flow")]
 async fn journey_flow(
   name: web::Path<String>,
+  query: Query<JourneyFlowQuery>,
   data: web::Data<AppMutState>,
 ) -> Result<web::Json<FlowPayload>, ShowMeErrors> {
-  let tree = data.authentication_tree.get_tree(&name.into_inner());
+  let transaction_id = &query.transaction_id;
+  let tree = data.authentication_tree.get_tree(&name);
+
+  let node_outcomes = (match transaction_id {
+    Some(id) => get_node_outcomes(id).await,
+    None => Ok(vec![]),
+  })
+  .unwrap_or(vec![]);
 
   match tree {
     None => Err(ShowMeErrors::NoLogsFound(
@@ -304,7 +352,7 @@ async fn journey_flow(
     )),
     Some(tree_jouney) => Ok(web::Json(FlowPayload {
       nodes: tree_jouney.generate_nodes(),
-      edges: tree_jouney.generate_edges(),
+      edges: tree_jouney.generate_edges(&node_outcomes),
     })),
   }
 }
@@ -421,7 +469,9 @@ async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Sh
     .max_continuation_size(2_usize.pow(20));
   rt::spawn(async move {
     loop {
-      s2.text(format!("booo    {}", chrono::Utc::now().timestamp())).await.unwrap();
+      s2.text(format!("booo    {}", chrono::Utc::now().timestamp()))
+        .await
+        .unwrap();
       sleep(Duration::from_secs(2)).await
     }
   });
