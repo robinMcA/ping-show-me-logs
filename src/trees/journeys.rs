@@ -7,6 +7,9 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+use crate::NodeOutcomeEdge;
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum NodeType {
   AccountLockoutNode,
   AgentDataStoreDecisionNode,
@@ -170,6 +173,11 @@ enum EdgeType {
 }
 
 #[derive(Serialize)]
+struct ReactFlowEdgeStyle {
+  stroke: String,
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReactFlowEdge {
   id: String,
@@ -178,6 +186,7 @@ pub struct ReactFlowEdge {
   source: String,
   target: String,
   source_handle: String,
+  style: ReactFlowEdgeStyle,
 }
 
 #[derive(Serialize)]
@@ -252,28 +261,52 @@ impl Tree {
     Ok(test)
   }
 
-  pub fn generate_edges(&self) -> Vec<ReactFlowEdge> {
+  pub fn generate_edges(&self, outcomes: &Vec<NodeOutcomeEdge>) -> Vec<ReactFlowEdge> {
     let start_edge = ReactFlowEdge {
       id: "startNode".to_string(),
       edge_type: EdgeType::Normal,
       source: "startNode".to_string(),
       target: self.entry_node_id.clone(),
       source_handle: "ok".to_string(),
+      style: ReactFlowEdgeStyle {
+        stroke: "green".to_string(),
+      },
     };
+
     let mut rest = self
       .nodes
       .iter()
       .flat_map(|t| {
-        t.1.connections.iter().map(|v| ReactFlowEdge {
-          id: format!("{}/{}", t.0.to_owned(), v.0.to_owned()),
-          edge_type: if v.0.starts_with("error") {
-            EdgeType::Error
-          } else {
-            EdgeType::Normal
-          },
-          source: t.0.to_owned(),
-          target: v.1.to_string(),
-          source_handle: v.0.to_string(),
+        t.1.connections.iter().map(move |v| {
+          let handle = v.0.to_string();
+
+          let node_outcome = outcomes
+            .iter()
+            .find(|outcome| outcome.name == t.1.display_name && outcome.outcome == handle);
+
+          ReactFlowEdge {
+            id: format!("{}/{}", t.0.to_owned(), v.0.to_owned()),
+            edge_type: if v.0.starts_with("error") {
+              EdgeType::Error
+            } else {
+              EdgeType::Normal
+            },
+            source: t.0.to_owned(),
+            target: v.1.to_string(),
+            source_handle: v.0.to_string(),
+            style: ReactFlowEdgeStyle {
+              stroke: match node_outcome {
+                Some(outcome) => {
+                  if outcome.outcome == "error" {
+                    "red".to_string()
+                  } else {
+                    "green".to_string()
+                  }
+                }
+                None => "grey".to_string(),
+              },
+            },
+          }
         })
       })
       .collect::<Vec<ReactFlowEdge>>();

@@ -2,6 +2,9 @@ use crate::errors::ShowMeErrors;
 use crate::token::{get_usable_token, Token};
 use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use crate::trees::nodes::{NodeConfig, NodeData};
+use crate::errors::ShowMeErrors;
+use crate::token::Token;
+use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
@@ -45,9 +48,25 @@ enum Level {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
+struct NodeOutcomeInfo {
+  node_extra_logging: Option<serde_json::Map<String, serde_json::Value>>,
+  node_id: String,
+  node_outcome: String,
+  display_name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+struct NodeOutcome {
+  info: NodeOutcomeInfo,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 struct PingPayload {
   context: Option<String>,
   level: Level,
+  entries: Option<Vec<NodeOutcome>>,
   logger: Option<String>,
   message: Option<String>,
 }
@@ -90,7 +109,7 @@ async fn get_logs(
   query_filter: Option<&str>,
 ) -> Result<Logs, ShowMeErrors> {
   let params = [
-    ("source", "am-everything"),
+    ("source", "am-everything,idm-everything"),
     ("transactionId", transaction_id),
     (
       "_queryFilter",
@@ -136,6 +155,8 @@ enum Filters {
 #[derive(Debug, Deserialize, Clone)]
 struct LogsRequest {
   filters: Option<Filters>,
+  script_id: Option<String>,
+  node_id: Option<String>,
 }
 
 #[get("/logs/{fr_id}")]
@@ -144,7 +165,28 @@ async fn logs(
   query: Query<LogsRequest>,
 ) -> Result<web::Json<Logs>, ShowMeErrors> {
   let id = fr_id.into_inner();
-  match get_logs(&Client::new(), &id, None).await {
+
+  let script_filter = query.script_id.clone().map(|script_id| {
+    format!(
+      "/payload/logger sw \"scripts.AUTHENTICATION_TREE_DECISION_NODE.{}\"",
+      script_id
+    )
+  });
+
+  let node_filter = query
+    .node_id
+    .clone()
+    .map(|node_id| format!("/payload/entries/info/nodeId eq \"{}\"", node_id));
+
+  let defined_filters: Vec<String> = vec![node_filter, script_filter]
+    .iter()
+    .filter(|maybe_filter| maybe_filter.is_some())
+    .map(|filter| filter.as_ref().cloned().unwrap())
+    .collect();
+
+  let query_filter = defined_filters.clone().join(" or ");
+
+  match get_logs(&Client::new(), &id, Some(query_filter.as_str())).await {
     Ok(ll) => Ok(match query.filters.clone() {
       None => web::Json(ll),
       Some(filter) => match filter {
@@ -179,7 +221,6 @@ async fn script_logs(
 
   let query_filter = Some(formatted_query.as_str());
 
-  println!("{:?} {:?}", formatted_query, path.fr_id);
   match get_logs(&Client::new(), &path.fr_id, query_filter).await {
     Ok(ll) => Ok(match query.filters.clone() {
       None => web::Json(ll),
@@ -255,12 +296,61 @@ struct FlowPayload {
   edges: Vec<ReactFlowEdge>,
 }
 
+#[derive(Debug)]
+struct NodeOutcomeEdge {
+  name: String,
+  outcome: String,
+}
+
+async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>, ShowMeErrors> {
+  match get_logs(
+    &Client::new(),
+    &transaction_id,
+    Some("/payload/entries/info/nodeOutcome pr"),
+  )
+  .await
+  {
+    Ok(ll) => Ok(
+      ll.result
+        .iter()
+        .map(|log| {
+          let payload = log.payload.entries.clone().unwrap_or(vec![])[0]
+            .info
+            .clone();
+
+          let outcome = payload.node_outcome;
+          let name = payload.display_name;
+
+          NodeOutcomeEdge { name, outcome }
+        })
+        .collect(),
+    ),
+    Err(err) => {
+      println!("{}", err);
+      Err(ShowMeErrors::NoLogsFound(transaction_id.to_string()))
+    }
+  }
+}
+
+#[derive(Deserialize)]
+struct JourneyFlowQuery {
+  transaction_id: Option<String>,
+}
+
 #[get("/journey/{name}/flow")]
 async fn journey_flow(
   name: web::Path<String>,
+  query: Query<JourneyFlowQuery>,
   data: web::Data<AppMutState>,
 ) -> Result<web::Json<FlowPayload>, ShowMeErrors> {
-  let tree = data.authentication_tree.get_tree(&name.into_inner());
+  let transaction_id = &query.transaction_id;
+  let tree = data.authentication_tree.get_tree(&name);
+
+  let node_outcomes = (match transaction_id {
+    Some(id) => get_node_outcomes(id).await,
+    None => Ok(vec![]),
+  })
+  .unwrap_or(vec![]);
 
   match tree {
     None => Err(ShowMeErrors::NoLogsFound(
@@ -268,7 +358,7 @@ async fn journey_flow(
     )),
     Some(tree_jouney) => Ok(web::Json(FlowPayload {
       nodes: tree_jouney.generate_nodes(),
-      edges: tree_jouney.generate_edges(),
+      edges: tree_jouney.generate_edges(&node_outcomes),
     })),
   }
 }
@@ -477,7 +567,6 @@ async fn main() -> Result<(), ShowMeErrors> {
         web::scope("/api")
           .service(get_watch)
           .service(logs)
-          .service(script_logs)
           .service(set_watch)
           .service(journey_flow)
           .service(journey_script)

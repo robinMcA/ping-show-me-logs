@@ -26,7 +26,7 @@ const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void,
+  togglePage: (pageKey: (typeof pages)[number]) => void
 ) => (
   <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
     <List>
@@ -57,7 +57,7 @@ const ManualLogs = () => {
     frRequestId === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -82,7 +82,7 @@ const WatchLogs = () => {
   const [watching, setWatching] = useState<string>("Error");
   const { data: watchData } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -120,15 +120,15 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher,
+    jsonFetcher
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
   const { data: journeyFlow } = useSWR(
     selectedJourney === undefined
       ? null
-      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow`,
-    jsonFetcher,
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow?transaction_id=a63aa539-0446-4c0f-b685-f4ab9ad86e53`,
+    jsonFetcher
   );
 
   const nodes = journeyFlow?.nodes.map(
@@ -149,8 +149,9 @@ const ReactFlowComp = () => {
               ? "Fail"
               : node.data.name,
       },
-    }),
+    })
   );
+
   const edges = journeyFlow?.edges;
 
   return (
