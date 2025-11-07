@@ -8,10 +8,11 @@ use actix_web::web::Query;
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, mime, post, rt, web};
 use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
+use futures::future;
 use futures_util::{StreamExt as _, TryFutureExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -66,6 +67,7 @@ struct PingPayload {
   logger: Option<String>,
   message: Option<String>,
   transaction_id: String,
+  tracking_ids: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -300,33 +302,79 @@ struct NodeOutcomeEdge {
 }
 
 async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>, ShowMeErrors> {
-  match get_logs(
-    &Client::new(),
+  let client = &Client::new();
+
+  // Get latest node outcomes with tracking IDs
+  let most_recent_transaction_logs = get_logs(
+    client,
     &transaction_id,
     Some("/payload/entries/info/nodeOutcome pr"),
   )
   .await
-  {
-    Ok(ll) => Ok(
-      ll.result
-        .iter()
-        .map(|log| {
-          let payload = log.payload.entries.clone().unwrap_or(vec![])[0]
-            .info
-            .clone();
+  .map_or(vec![], |some_logs| some_logs.result);
 
-          let outcome = payload.node_outcome;
-          let name = payload.display_name;
+  let mut tracking_ids: Vec<String> = most_recent_transaction_logs
+    .clone()
+    .iter()
+    .flat_map(|log| log.payload.tracking_ids.clone())
+    .collect::<HashSet<_>>()
+    .into_iter()
+    .collect();
 
-          NodeOutcomeEdge { name, outcome }
-        })
-        .collect(),
-    ),
-    Err(err) => {
-      println!("{}", err);
-      Err(ShowMeErrors::NoLogsFound(transaction_id.to_string()))
-    }
-  }
+  tracking_ids.sort();
+
+  let async_logs = future::join_all(if !tracking_ids.is_empty() {
+    tracking_ids
+      .into_iter() // takes ownership of each String
+      .map(|tracking_id| async move {
+        println!(
+          "Getting logs for additional tracking ID [{:?}]...",
+          tracking_id
+        );
+
+        let some_logs = get_logs(
+          client,
+          "",
+          Some(&format!(
+            "/payload/trackingIds eq \"{}\" and /payload/entries/info/nodeOutcome pr",
+            tracking_id
+          )),
+        )
+        .await;
+
+        let final_logs = some_logs.map_or(vec![], |some_logs| some_logs.result);
+
+        println!(
+          "Got  [{:?}] logs for tracking ID [{:?}].",
+          final_logs.len(),
+          tracking_id,
+        );
+
+        final_logs
+      })
+      .collect()
+  } else {
+    vec![]
+  })
+  .await;
+
+  // Perform query for all other node outcomes in the journey with the tracking ID
+  let all_transaction_logs: Vec<&ResultingLog> =
+    async_logs.iter().flat_map(|results| results).collect();
+
+  Ok(
+    all_transaction_logs
+      .iter()
+      .map(|log| {
+        let thing = &log.payload.entries.clone().unwrap_or(vec![])[0];
+
+        NodeOutcomeEdge {
+          name: thing.info.display_name.clone(),
+          outcome: thing.info.node_outcome.clone(),
+        }
+      })
+      .collect(),
+  )
 }
 
 #[derive(Deserialize)]
