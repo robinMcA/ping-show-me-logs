@@ -153,7 +153,7 @@ enum Filters {
 struct LogsRequest {
   filters: Option<Filters>,
   script_id: Option<String>,
-  node_id: Option<String>,
+  script_name: Option<String>,
 }
 
 #[get("/logs/{fr_id}")]
@@ -171,9 +171,9 @@ async fn logs(
   });
 
   let node_filter = query
-    .node_id
+    .script_name
     .clone()
-    .map(|node_id| format!("/payload/entries/info/nodeId eq \"{}\"", node_id));
+    .map(|script_name| format!("/payload/entries/info/displayName eq \"{}\"", script_name));
 
   let defined_filters: Vec<String> = vec![node_filter, script_filter]
     .iter()
