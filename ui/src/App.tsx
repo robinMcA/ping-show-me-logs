@@ -27,7 +27,7 @@ const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void,
+  togglePage: (pageKey: (typeof pages)[number]) => void
 ) => (
   <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
     <List>
@@ -58,7 +58,7 @@ const ManualLogs = () => {
     frRequestId === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -83,7 +83,7 @@ const WatchLogs = () => {
   const [watching, setWatching] = useState<string>("Error");
   const { data: watchData } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -121,15 +121,15 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher,
+    jsonFetcher
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
   const [selectedNode, setSelectedNode] = useState<string | undefined>(
-    undefined,
+    undefined
   );
   const [transactionId, setTransactionId] = useState<string | undefined>(
-    undefined,
+    undefined
   );
 
   useOnSelectionChange({
@@ -148,7 +148,7 @@ const ReactFlowComp = () => {
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow${transactionId !== undefined ? `?transaction_id=${transactionId}` : ""}`,
-    jsonFetcher,
+    jsonFetcher
   );
 
   const { data: journeyTransactions } = useSWR(
@@ -161,26 +161,26 @@ const ReactFlowComp = () => {
           data: {
             transaction_id: string;
             timestamp: string;
-          }[],
+          }[]
         ) => [
           ...new Set(
             data
               .sort(({ timestamp: timestampA }, { timestamp: timestampB }) =>
-                timestampA > timestampB ? 1 : -1,
+                timestampA > timestampB ? 1 : -1
               )
               .map(({ transaction_id }) =>
-                transaction_id.split("-request")[0].replace(/\/\d/gu, ""),
-              ),
+                transaction_id.split("-request")[0].replace(/\/\d/gu, "")
+              )
           ),
-        ],
-      ),
+        ]
+      )
   );
 
   const { data: journeyScripts } = useSWR(
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/scripts`,
-    jsonFetcher,
+    jsonFetcher
   );
 
   console.info({ journeyScripts });
@@ -188,7 +188,7 @@ const ReactFlowComp = () => {
   const { data: scriptLogs } = useSWR(
     !journeyScripts || !selectedNode || !transactionId
       ? null
-      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${transactionId}?script_id=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?._id}&node_id=${selectedNode}`,
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${transactionId}?script_id=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?._id}&script_name=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?.name}`,
     jsonFetcher
   );
 
