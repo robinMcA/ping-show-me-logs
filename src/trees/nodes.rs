@@ -37,13 +37,13 @@ pub enum NodeConfig {
   None,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct Script {
   #[serde(rename = "_id")]
   id: String,
   name: String,
-  description: String,
-  script: String
+  description: Option<String>,
+  script: String,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -79,9 +79,7 @@ pub async fn node_id_to_script_config(
     .bytes()
     .await?;
 
-
   let script_data: Script = serde_json::from_slice(script_txt)?;
-
 
   Ok((
     NodeConfig::ScriptConfig(script_config),

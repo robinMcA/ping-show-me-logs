@@ -1,19 +1,17 @@
-use std::collections::HashMap;
 use crate::errors::ShowMeErrors;
-use crate::token::{get_usable_token, Token};
+use crate::token::{Token, get_usable_token};
 use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode, Tree};
 use crate::trees::nodes::{NodeConfig, NodeData};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::web::Query;
-use actix_web::{
-  get, mime, post, rt, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
-};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, mime, post, rt, web};
 use actix_ws::AggregatedMessage;
 use chrono::{DateTime, Utc};
 use futures_util::{StreamExt as _, TryFutureExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -67,6 +65,7 @@ struct PingPayload {
   entries: Option<Vec<NodeOutcome>>,
   logger: Option<String>,
   message: Option<String>,
+  transaction_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -361,6 +360,44 @@ async fn journey_flow(
   }
 }
 
+#[derive(Serialize)]
+struct JourneyTransaction {
+  transaction_id: String,
+  timestamp: DateTime<Utc>,
+}
+
+#[get("/journey/{name}/transactions")]
+async fn get_journey_transactions(
+  journey_name: web::Path<String>,
+) -> Result<web::Json<Vec<JourneyTransaction>>, ShowMeErrors> {
+  let journey_transactions = get_logs(
+    &Client::new(),
+    "", // Blank transaction ID effectively runs a * search.
+    Some(
+      format!(
+        "/payload/entries/info/treeName eq \"{}\" and /payload/entries/info/nodeOutcome pr and /payload/eventName eq \"AM-NODE-LOGIN-COMPLETED\"",
+        journey_name
+      )
+      .as_str(),
+    ),
+  )
+  .await;
+
+  match journey_transactions {
+    Ok(transactions) => Ok(web::Json(
+      transactions
+        .result
+        .iter()
+        .map(|log| JourneyTransaction {
+          timestamp: log.timestamp,
+          transaction_id: log.payload.transaction_id.clone(),
+        })
+        .collect(),
+    )),
+    Err(err) => Err(err),
+  }
+}
+
 #[get("/journey/{name}/scripts")]
 async fn journey_script(
   name: web::Path<String>,
@@ -369,13 +406,9 @@ async fn journey_script(
   let (token_str, payload) = get_usable_token(&data.token, &data.payload, &data.token_str).await?;
 
   let dom = &data.token.dom;
-  let tree = match data
-    .authentication_tree
-    .get_tree(&name.into_inner()) {
-    None => {HashMap::new()}
-    Some(data) => {data
-      .get_node_info(dom, &token_str)
-      .await?}
+  let tree = match data.authentication_tree.get_tree(&name.into_inner()) {
+    None => HashMap::new(),
+    Some(data) => data.get_node_info(dom, &token_str).await?,
   };
 
   Ok(web::Json(tree))
@@ -571,6 +604,7 @@ async fn main() -> Result<(), ShowMeErrors> {
           .service(journey_flow)
           .service(journey_script)
           .service(get_journey)
+          .service(get_journey_transactions)
           .route("/echo", web::get().to(echo))
           .service(web::scope("/monitoring").service(am).service(idm)),
       )
