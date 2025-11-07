@@ -24,5 +24,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": [
+    "src",
+    "../../../Library/Caches/JetBrains/WebStorm2025.2/javascript/typings/express/5.0.4/node_modules/@types/node/buffer.d.ts"
+  ]
 }
