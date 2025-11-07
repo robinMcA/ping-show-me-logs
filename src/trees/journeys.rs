@@ -1,12 +1,12 @@
+use crate::NodeOutcomeEdge;
 use crate::errors::ShowMeErrors;
 use crate::token::Token;
 use crate::trees::nodes::{NodeConfig, NodeData, node_id_to_script_config};
 use futures::future::JoinAll;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use futures_util::StreamExt;
-use crate::NodeOutcomeEdge;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum NodeType {
@@ -243,18 +243,21 @@ impl Tree {
     &self,
     dom: &str,
     token_str: &str,
-  ) -> Result<HashMap<String,(NodeConfig, NodeData)>, ShowMeErrors> {
-    println!("here");
+  ) -> Result<HashMap<String, (NodeConfig, NodeData)>, ShowMeErrors> {
     let test = self
       .nodes
       .iter()
       .map(async |t| {
         node_id_to_script_config(&t.1.node_type, t.0, dom, &token_str)
-          .await.map(|v| (t.0.clone(), v))
-          .unwrap_or( ("nothing".to_string(),(NodeConfig::None, NodeData::None)))
+          .await
+          .map(|v| (t.0.clone(), v))
+          .unwrap_or(("nothing".to_string(), (NodeConfig::None, NodeData::None)))
       })
       .collect::<JoinAll<_>>()
-      .await.iter().cloned().collect();
+      .await
+      .iter()
+      .cloned()
+      .collect();
 
     Ok(test)
   }

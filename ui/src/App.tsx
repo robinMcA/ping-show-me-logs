@@ -14,7 +14,7 @@ import "./App.css";
 import useSWR, { type Fetcher } from "swr";
 import { PingNode } from "./CustomNodes.tsx";
 import type { Root } from "./types";
-import { ReactFlow } from "@xyflow/react";
+import { ReactFlow, useOnSelectionChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 const pages = ["manualLogs", "watchLogs", "flow"] as const;
@@ -28,7 +28,7 @@ const doubleFetcher = (base: string) =>
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void,
+  togglePage: (pageKey: (typeof pages)[number]) => void
 ) => (
   <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
     <List>
@@ -59,7 +59,7 @@ const ManualLogs = () => {
     frRequestId === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -84,7 +84,7 @@ const WatchLogs = () => {
   const [watching, setWatching] = useState<string>("Error");
   const { data: watchData } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher,
+    simpleJsonFetcher
   );
   return (
     <>
@@ -122,18 +122,76 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher,
+    jsonFetcher
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
-  const { data: journeyData } = useSWR(
-    selectedJourney === undefined
-      ? null
-      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}`,
-    doubleFetcher,
+  const [selectedNode, setSelectedNode] = useState<string | undefined>(
+    undefined
+  );
+  const [transactionId, setTransactionId] = useState<string | undefined>(
+    undefined
   );
 
-  const [journeyFlow, journeyScripts] = journeyData ?? [{ nodes: [] }, {}];
+  useOnSelectionChange({
+    onChange: (data) => {
+      const node = data.nodes[0];
+
+      if (!node) {
+        return;
+      }
+
+      setSelectedNode(node.data.id as string);
+    },
+  });
+
+  const { data: journeyFlow } = useSWR(
+    selectedJourney === undefined
+      ? null
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow${transactionId !== undefined ? `?transaction_id=${transactionId}` : ""}`,
+    jsonFetcher
+  );
+
+  const { data: journeyTransactions } = useSWR(
+    selectedJourney === undefined
+      ? null
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/transactions`,
+    (url: string) =>
+      jsonFetcher(url).then(
+        (
+          data: {
+            transaction_id: string;
+            timestamp: string;
+          }[]
+        ) => [
+          ...new Set(
+            data
+              .sort(({ timestamp: timestampA }, { timestamp: timestampB }) =>
+                timestampA > timestampB ? 1 : -1
+              )
+              .map(({ transaction_id }) =>
+                transaction_id.split("-request")[0].replace(/\/\d/gu, "")
+              )
+          ),
+        ]
+      )
+  );
+
+  const { data: journeyScripts } = useSWR(
+    selectedJourney === undefined
+      ? null
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/scripts`,
+    jsonFetcher
+  );
+
+  console.info({ journeyScripts });
+
+  // const { data: scriptLogs } = useSWR(
+  //   journeyScripts === null || selectedNode === undefined
+  //     ? null
+  //     : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs`,
+  //   jsonFetcher
+  // );
 
   const nodes = journeyFlow?.nodes.map(
     (node: { id: string; data: { name?: string }; handles: object[] }) => ({
@@ -154,41 +212,60 @@ const ReactFlowComp = () => {
               ? "Fail"
               : node.data.name,
       },
-    }),
+    })
   );
 
   const edges = journeyFlow?.edges;
 
   return (
-    <div>
-      <select
-        value={selectedJourney}
-        onChange={(event) => setReselectedJourney(event.target.value)}
-      >
-        {((journeyList as string[]) ?? []).map((name, i) => (
-          <option key={i} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
-      <label htmlFor="startsWith">Starts With:</label>
-      <input
-        type="text"
-        id="startsWith"
-        name="startsWith"
-        value={startsWith}
-        onChange={(e) => setStartsWith(e.target.value)}
-      />
-      <label htmlFor="endsWith">Ends With:</label>
-      <input
-        type="text"
-        id="endsWith"
-        name="endsWith"
-        value={endsWith}
-        onChange={(e) => setEndsWith(e.target.value)}
-      />
-      <div style={{ height: "90vh", width: "90vw" }}>
-        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
+    <div style={{ display: "flex", flexDirection: "row" }}>
+      <div style={{ minWidth: "650px" }}>
+        <select
+          value={transactionId}
+          onChange={(event) => setTransactionId(event.target.value)}
+        >
+          {(journeyTransactions ?? []).map((transactionId, i) => (
+            <option key={i} value={transactionId}>
+              {transactionId}
+            </option>
+          ))}
+        </select>
+        {selectedNode !== undefined ? (
+          <p>Select a node to view its logs.</p>
+        ) : (
+          <p></p>
+        )}
+      </div>
+      <div>
+        <select
+          value={selectedJourney}
+          onChange={(event) => setReselectedJourney(event.target.value)}
+        >
+          {((journeyList as string[]) ?? []).sort().map((name, i) => (
+            <option key={i} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="startsWith">Starts With:</label>
+        <input
+          type="text"
+          id="startsWith"
+          name="startsWith"
+          value={startsWith}
+          onChange={(e) => setStartsWith(e.target.value)}
+        />
+        <label htmlFor="endsWith">Ends With:</label>
+        <input
+          type="text"
+          id="endsWith"
+          name="endsWith"
+          value={endsWith}
+          onChange={(e) => setEndsWith(e.target.value)}
+        />
+        <div style={{ height: "90vh", width: "90vw" }}>
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
+        </div>
       </div>
     </div>
   );
