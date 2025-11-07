@@ -5,7 +5,7 @@ use futures::future::JoinAll;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-
+use futures_util::StreamExt;
 use crate::NodeOutcomeEdge;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -243,19 +243,18 @@ impl Tree {
     &self,
     dom: &str,
     token_str: &str,
-  ) -> Result<Vec<(NodeConfig, NodeData)>, ShowMeErrors> {
+  ) -> Result<HashMap<String,(NodeConfig, NodeData)>, ShowMeErrors> {
     println!("here");
     let test = self
       .nodes
       .iter()
       .map(async |t| {
-        println!("{}", t.1.node_type);
         node_id_to_script_config(&t.1.node_type, t.0, dom, &token_str)
-          .await
-          .unwrap_or( (NodeConfig::None, NodeData::None))
+          .await.map(|v| (t.0.clone(), v))
+          .unwrap_or( ("nothing".to_string(),(NodeConfig::None, NodeData::None)))
       })
       .collect::<JoinAll<_>>()
-      .await;
+      .await.iter().cloned().collect();
 
     Ok(test)
   }

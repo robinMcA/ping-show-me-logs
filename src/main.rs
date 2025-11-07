@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use crate::errors::ShowMeErrors;
 use crate::token::{get_usable_token, Token};
-use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode};
+use crate::trees::journeys::{AuthenticationTreeList, ReactFlowEdge, ReactFlowNode, Tree};
 use crate::trees::nodes::{NodeConfig, NodeData};
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
@@ -364,16 +365,18 @@ async fn journey_flow(
 async fn journey_script(
   name: web::Path<String>,
   data: web::Data<AppMutState>,
-) -> Result<web::Json<Vec<(NodeConfig, NodeData)>>, ShowMeErrors> {
+) -> Result<web::Json<HashMap<String, (NodeConfig, NodeData)>>, ShowMeErrors> {
   let (token_str, payload) = get_usable_token(&data.token, &data.payload, &data.token_str).await?;
 
   let dom = &data.token.dom;
-  let tree = data
+  let tree = match data
     .authentication_tree
-    .get_tree(&name.into_inner())
-    .unwrap()
-    .get_node_info(dom, &token_str)
-    .await?;
+    .get_tree(&name.into_inner()) {
+    None => {HashMap::new()}
+    Some(data) => {data
+      .get_node_info(dom, &token_str)
+      .await?}
+  };
 
   Ok(web::Json(tree))
 }
