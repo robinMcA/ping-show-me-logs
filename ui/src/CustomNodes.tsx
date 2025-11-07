@@ -2,7 +2,7 @@ import { Handle, type NodeProps, Position, type Node } from "@xyflow/react";
 import { useState } from "react";
 import Modal from "@mui/material/Modal";
 import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
 export type PingNode = Node<
   {
     handles: Array<Handle>;
@@ -54,27 +54,34 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
         type={"target"}
         position={Position.Left}
         className="custom-handle"
+        style={{ padding: 0 }}
       />
-      <div onClick={handleOpen}>
-        <div className="resizer-node__handles">
-          {handles.map((hand, i) => (
-            <Handle
-              type={"source"}
-              position={Position.Right}
-              style={{
-                top: (i + 1) * 20,
-                background: "none",
-              }}
-              id={hand.id}
-              key={`${i}-${hand.id}-${hand.nodeId}`}
-              className="resizer-node__handle custom-handle"
-            >
-              {hand.id}
-            </Handle>
-          ))}
-        </div>
-        <div>{data?.name ?? "ToDo"}</div>
-        <div>{data?.type ?? "ToDo"}</div>
+      <div className="resizer-node__handles">
+        {handles.map((hand, i) => (
+          <Handle
+            type={"source"}
+            position={Position.Right}
+            style={{
+              top: (i + 1) * 20,
+              background: "none",
+            }}
+            id={hand.id}
+            key={`${i}-${hand.id}-${hand.nodeId}`}
+            className="resizer-node__handle custom-handle"
+          >
+            {hand.id}
+          </Handle>
+        ))}
+      </div>
+      <div>{data?.name ?? "ToDo"}</div>
+      <div>{data?.type ?? "ToDo"}</div>
+      <div style={{ position: "absolute", bottom: 0 }}>
+        <Button
+          style={{ margin: 0, padding: 0, fontSize: "x-small" }}
+          onClick={handleOpen}
+        >
+          Script
+        </Button>
       </div>
     </>
   );
