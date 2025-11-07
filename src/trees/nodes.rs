@@ -31,6 +31,7 @@ struct ScriptConfig {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(tag = "type")]
 pub enum NodeConfig {
   ScriptConfig(ScriptConfig),
   None,
@@ -46,6 +47,7 @@ struct Script {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(tag = "type")]
 pub enum NodeData {
   Scirpt(Script),
   None,

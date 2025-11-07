@@ -23,10 +23,12 @@ const simpleJsonFetcher: Fetcher<Root, string> = (url: string) =>
   fetch(url).then((r) => r.json());
 
 const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
+const doubleFetcher = (base: string) =>
+  Promise.all([`${base}/flow`, `${base}/scripts`].map(jsonFetcher));
 
 const DrawerList = (
   toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void
+  togglePage: (pageKey: (typeof pages)[number]) => void,
 ) => (
   <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
     <List>
@@ -57,7 +59,7 @@ const ManualLogs = () => {
     frRequestId === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher
+    simpleJsonFetcher,
   );
   return (
     <>
@@ -82,7 +84,7 @@ const WatchLogs = () => {
   const [watching, setWatching] = useState<string>("Error");
   const { data: watchData } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher
+    simpleJsonFetcher,
   );
   return (
     <>
@@ -120,19 +122,21 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher
+    jsonFetcher,
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
-  const { data: journeyFlow } = useSWR(
+  const { data: journeyData } = useSWR(
     selectedJourney === undefined
       ? null
-      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow?transaction_id=a63aa539-0446-4c0f-b685-f4ab9ad86e53`,
-    jsonFetcher
+      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}`,
+    doubleFetcher,
   );
 
+  const [journeyFlow, journeyScripts] = journeyData ?? [{ nodes: [] }, {}];
+
   const nodes = journeyFlow?.nodes.map(
-    (node: { data: { name?: string }; handles: object[] }) => ({
+    (node: { id: string; data: { name?: string }; handles: object[] }) => ({
       ...node,
       type: "ping",
       style: {
@@ -141,6 +145,7 @@ const ReactFlowComp = () => {
       data: {
         handles: node.handles,
         ...node.data,
+        scriptContent: journeyScripts[node.id] ?? [{}, { script: "" }],
         name: node.data.name?.startsWith("s")
           ? node.data.name
           : node.data.name === "70e691a5-1e33-4ac3-a356-e7b6d60d92e0"
@@ -149,7 +154,7 @@ const ReactFlowComp = () => {
               ? "Fail"
               : node.data.name,
       },
-    })
+    }),
   );
 
   const edges = journeyFlow?.edges;
