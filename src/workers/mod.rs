@@ -1,1 +1,1 @@
-mod scripts;
+pub mod scripts;

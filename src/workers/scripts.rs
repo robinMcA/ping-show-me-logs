@@ -2,6 +2,7 @@ use crate::errors::ShowMeErrors;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use futures_util::future::JoinAll;
 
 #[derive(Deserialize)]
 pub struct ScriptListRoot {
@@ -53,7 +54,7 @@ pub struct Outcomes {
   pub default: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone )]
 pub struct Script {
   pub title: String,
   pub description: String,
@@ -71,7 +72,7 @@ pub struct Script {
   pub default: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Serialize)]
 pub struct Options {
   pub enum_titles: Vec<String>,
 }
@@ -90,7 +91,7 @@ pub struct Inputs {
   pub default: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct ScriptConfig {
   name: String,
   id: String,
@@ -103,8 +104,39 @@ impl From<(String, String, String)> for ScriptConfig {
   }
 }
 
-async fn list_scripts(
-  client: Client,
+#[derive(Serialize, Clone )]
+pub struct RichScript {
+  name: String,
+  id: String,
+  title: String,
+  script: Script,
+}
+
+pub async fn get_rich_script(
+  client: &Client,
+  dom: &str,
+  token_str: &str,
+  script_config: &ScriptConfig,
+) -> Result<RichScript, ShowMeErrors> {
+  let script_txt = &client
+    .get(format!("{dom}/am/json/alpha/scripts/{}", script_config.id))
+    .header("authorization", format!("Bearer {}", token_str))
+    .send()
+    .await?
+    .bytes()
+    .await?;
+
+  let script_data: Script = serde_json::from_slice(script_txt)?;
+  Ok(RichScript {
+    name: script_config.name.clone(),
+    id: script_config.id.clone(),
+    title: script_config.title.clone(),
+    script: script_data,
+  })
+}
+
+pub async fn list_scripts(
+  client: &Client,
   dom: &str,
   token_str: &str,
 ) -> Result<HashMap<String, ScriptConfig>, ShowMeErrors> {

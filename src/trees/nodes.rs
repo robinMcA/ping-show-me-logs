@@ -71,8 +71,6 @@ pub async fn node_id_to_script_config(
 
   let script_id = &script_config.script;
 
-
-
   let script_txt = &client
     .get(format!("{dom}/am/json/alpha/scripts/{script_id}"))
     .header("authorization", format!("Bearer {}", token_str))

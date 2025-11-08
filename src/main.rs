@@ -1,19 +1,23 @@
 use crate::errors::ShowMeErrors;
 use crate::ping_logs::service::log_api;
-use crate::token::{get_usable_token, Token};
+use crate::token::{Token, get_usable_token};
 use crate::trees::journeys::AuthenticationTreeList;
 use crate::trees::service::trees_api;
+use crate::workers::scripts::{RichScript, ScriptConfig,  list_scripts, get_rich_script};
 use actix_web::http::header::ContentType;
-use actix_web::{get, mime, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::rt::time::sleep;
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, mime, rt, web};
 use futures_util::StreamExt as _;
 use reqwest::Client;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 
 mod errors;
+mod ping_logs;
 mod token;
 mod trees;
-mod ping_logs;
 mod workers;
 
 struct AppMutState {
@@ -25,6 +29,7 @@ struct AppMutState {
   sec: String,
   key: String,
   log: String,
+  script_config: Mutex<HashMap<String, ScriptConfig>>,
 }
 // this could be done with rust embed
 async fn index(req: HttpRequest) -> Result<HttpResponse, ShowMeErrors> {
@@ -121,7 +126,32 @@ async fn main() -> Result<(), ShowMeErrors> {
     sec,
     key,
     log: url,
+    script_config: Mutex::new(HashMap::new()),
   });
+
+  let data = state.clone();
+  rt::spawn(async move {
+    let client = Client::new();
+    loop {
+      let (token_str, payload) =
+        get_usable_token(&data.token, &data.payload, &data.token_str).await?;
+      let scripts = list_scripts(&client, &data.token.dom, &token_str).await?;
+
+      let mut sct = data
+        .script_config
+        .lock()
+        .map_err(|_| ShowMeErrors::SharedLocking("script list".into()))?;
+
+      *sct = scripts;
+
+      // Otherwise this lock would only go out of scope when the sleep endds.
+      drop(sct);
+
+      sleep(Duration::from_secs(30)).await;
+    }
+    Ok::<(), ShowMeErrors>(())
+  });
+
 
   HttpServer::new(move || {
     let cors = actix_cors::Cors::permissive().allow_any_header();

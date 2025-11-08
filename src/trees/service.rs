@@ -1,16 +1,18 @@
 use crate::errors::ShowMeErrors;
-use crate::ping_logs::logs::{get_logs, ResultingLog};
+use crate::ping_logs::logs::{ResultingLog, get_logs};
 use crate::token::get_usable_token;
 use crate::trees::journeys::{ReactFlowEdge, ReactFlowNode};
 use crate::trees::nodes::{NodeConfig, NodeData};
+use crate::workers::scripts::{RichScript, ScriptConfig};
 use crate::{AppMutState, NodeOutcomeEdge};
 use actix_web::web::Query;
 use actix_web::{get, web};
 use chrono::{DateTime, Utc};
+use futures_util::future;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use futures_util::future;
+use std::ops::Deref;
 
 #[derive(Deserialize)]
 struct JourneyFlowQuery {
@@ -48,6 +50,20 @@ struct JourneyTransaction {
   transaction_id: String,
   timestamp: DateTime<Utc>,
 }
+
+#[get("/scripts")]
+async fn list_scripts(
+  data: web::Data<AppMutState>,
+) -> Result<web::Json<HashMap<String, ScriptConfig>>, ShowMeErrors> {
+  let saved_scripts = (*data
+    .script_config
+    .lock()
+    .map_err(|_| ShowMeErrors::SharedLocking("get scripts endpoint".to_string()))?)
+  .clone();
+
+  Ok(web::Json(saved_scripts))
+}
+
 
 #[get("/{name}/transactions")]
 async fn get_journey_transactions(
@@ -150,8 +166,6 @@ async fn get_journey(
   Ok(web::Json(tree_list))
 }
 
-
-
 async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>, ShowMeErrors> {
   let client = &Client::new();
 
@@ -161,8 +175,8 @@ async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>,
     &transaction_id,
     Some("/payload/entries/info/nodeOutcome pr"),
   )
-    .await
-    .map_or(vec![], |some_logs| some_logs.result);
+  .await
+  .map_or(vec![], |some_logs| some_logs.result);
 
   let mut tracking_ids: Vec<String> = most_recent_transaction_logs
     .clone()
@@ -191,7 +205,7 @@ async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>,
             tracking_id
           )),
         )
-          .await;
+        .await;
 
         let final_logs = some_logs.map_or(vec![], |some_logs| some_logs.result);
 
@@ -207,7 +221,7 @@ async fn get_node_outcomes(transaction_id: &str) -> Result<Vec<NodeOutcomeEdge>,
   } else {
     vec![]
   })
-    .await;
+  .await;
 
   // Perform query for all other node outcomes in the journey with the tracking ID
   let all_transaction_logs: Vec<&ResultingLog> =
@@ -235,6 +249,7 @@ pub fn trees_api(cfg: &mut web::ServiceConfig) {
       .service(journey_flow)
       .service(journey_script)
       .service(get_journey)
-      .service(get_journey_transactions)
+      .service(list_scripts)
+      .service(get_journey_transactions),
   );
 }
