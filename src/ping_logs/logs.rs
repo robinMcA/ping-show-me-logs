@@ -85,10 +85,7 @@ pub(crate) async fn get_logs(
     ("transactionId", transaction_id),
     (
       "_queryFilter",
-      match query_filter {
-        Some(filter_string) => filter_string,
-        None => "",
-      },
+      query_filter.unwrap_or_else(|| ""),
     ),
   ];
 
