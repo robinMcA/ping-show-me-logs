@@ -14,6 +14,7 @@ mod errors;
 mod token;
 mod trees;
 mod ping_logs;
+mod workers;
 
 struct AppMutState {
   transaction_id: Mutex<String>,
