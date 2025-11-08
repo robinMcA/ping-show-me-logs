@@ -110,7 +110,7 @@ struct JourneyFilter {
   contains: Option<String>,
 }
 
-#[get("/")]
+#[get("")]
 async fn get_journey(
   data: web::Data<AppMutState>,
   query: Query<JourneyFilter>,

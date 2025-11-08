@@ -4,16 +4,11 @@ use crate::token::{get_usable_token, Token};
 use crate::trees::journeys::AuthenticationTreeList;
 use crate::trees::service::trees_api;
 use actix_web::http::header::ContentType;
-use actix_web::rt::time::sleep;
-use actix_web::{get, mime, rt, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_ws::AggregatedMessage;
+use actix_web::{get, mime, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use futures_util::StreamExt as _;
-use futures_util::TryFutureExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::Duration;
 
 mod errors;
 mod token;
@@ -62,51 +57,6 @@ async fn index(req: HttpRequest) -> Result<HttpResponse, ShowMeErrors> {
     }
     _ => HttpResponse::NotFound().body(""),
   })
-}
-async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, ShowMeErrors> {
-  let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
-
-  let mut s2 = session.clone();
-  let mut stream = stream
-    .aggregate_continuations()
-    // aggregate continuation frames up to 1MiB
-    .max_continuation_size(2_usize.pow(20));
-  rt::spawn(async move {
-    loop {
-      s2.text(format!("booo    {}", chrono::Utc::now().timestamp()))
-        .await
-        .unwrap();
-      sleep(Duration::from_secs(2)).await
-    }
-  });
-
-  // start task but don't wait for it
-  rt::spawn(async move {
-    // receive messages from websocket
-    while let Some(msg) = stream.next().await {
-      match msg {
-        Ok(AggregatedMessage::Text(text)) => {
-          // echo text message
-          session.text(text).await.unwrap();
-        }
-
-        Ok(AggregatedMessage::Binary(bin)) => {
-          // echo binary message
-          session.binary(bin).await.unwrap();
-        }
-
-        Ok(AggregatedMessage::Ping(msg)) => {
-          // respond to PING frame with PONG frame
-          session.pong(&msg).await.unwrap();
-        }
-
-        _ => {}
-      }
-    }
-  });
-
-  // respond immediately with response connected to WS session
-  Ok(res)
 }
 
 #[get("/idm")]
@@ -179,9 +129,8 @@ async fn main() -> Result<(), ShowMeErrors> {
       .wrap(cors)
       .service(
         web::scope("/api")
-          .configure(log_api)
           .configure(trees_api)
-          .route("/echo", web::get().to(echo))
+          .configure(log_api)
           .service(web::scope("/monitoring").service(am).service(idm)),
       )
       .route("/{filename:.*}", web::get().to(index))
