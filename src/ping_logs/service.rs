@@ -1,10 +1,25 @@
 use crate::errors::ShowMeErrors;
 use crate::ping_logs::logs::{get_logs, Level, Logs};
-use crate::{AppMutState, Filters, WatchFr};
+use crate::{AppMutState };
 use actix_web::web::Query;
 use actix_web::{get, post, web, Responder};
 use reqwest::Client;
 use serde::Deserialize;
+
+
+#[derive(Debug, Deserialize, Clone)]
+struct WatchFr {
+  fr_id: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+enum Filters {
+  All,
+  Warn,
+  Error,
+  Debug,
+  Default,
+}
 
 #[derive(Deserialize)]
 struct ScriptLogs {

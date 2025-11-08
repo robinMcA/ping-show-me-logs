@@ -1,3 +1,4 @@
 pub mod journeys;
 pub mod nodes;
-mod service;
+
+pub mod service;

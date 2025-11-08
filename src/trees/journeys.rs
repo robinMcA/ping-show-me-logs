@@ -1,9 +1,7 @@
-use crate::NodeOutcomeEdge;
 use crate::errors::ShowMeErrors;
-use crate::token::Token;
-use crate::trees::nodes::{NodeConfig, NodeData, node_id_to_script_config};
+use crate::trees::nodes::{node_id_to_script_config, NodeConfig, NodeData};
+use crate::NodeOutcomeEdge;
 use futures::future::JoinAll;
-use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
