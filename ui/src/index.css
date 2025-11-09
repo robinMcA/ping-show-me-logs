@@ -96,6 +96,7 @@ body {
   height: 100%;
   justify-content: space-evenly;
   top: 0;
+  padding: 0
 }
 
 .resizer-node__handle {
