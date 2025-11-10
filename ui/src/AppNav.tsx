@@ -49,13 +49,13 @@ const AppNav = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <>
+    <div style={{ height: "90vh", width: "97vw" }}>
       <Button onClick={toggleDrawer(true)}>Open Side Menu</Button>
       <Drawer open={open} onClose={toggleDrawer(false)}>
         <DrawerList toggleDrawer={toggleDrawer} />
       </Drawer>
       <>{children}</>
-    </>
+    </div>
   );
 };
 

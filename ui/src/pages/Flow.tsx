@@ -1,6 +1,7 @@
 import {
   Box,
   FormControl,
+  Grid,
   InputLabel,
   MenuItem,
   Select,
@@ -145,8 +146,12 @@ const FlowInner = () => {
   }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "row" }}>
-      <div style={{ minWidth: "350px", width: "30vw" }}>
+    <Grid
+      container
+      spacing={1}
+      style={{ display: "flex", flexDirection: "row" }}
+    >
+      <Grid size={3}>
         <FormControl fullWidth>
           <InputLabel id={"transaction-id"}>Select Transaction Id</InputLabel>
           <Select
@@ -172,57 +177,70 @@ const FlowInner = () => {
                 <Log key={ix} data={log.payload} />
               ))}
         </div>
-      </div>
-      <div>
-        <Box component={"form"} sx={{ display: "flex", flexWrap: "wrap" }}>
-          <FormControl fullWidth>
-            <Controller
-              name="selectedTree"
-              control={control}
-              render={({ field }) => (
-                <>
-                  <InputLabel id={"tree-select"}>Select Journey</InputLabel>
-                  <Select {...field} labelId={"tree-select"}>
-                    {((journeyList as string[]) ?? []).sort().map((name, i) => (
-                      <MenuItem key={`tree-${i}`} value={name}>
-                        {name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </>
-              )}
-            />
-          </FormControl>
-          <Controller
-            name={"startsWith"}
-            control={control}
-            render={({ field }) => (
-              <>
-                <TextField
-                  label={"Starts With"}
-                  id={"starts-with"}
-                  {...field}
+      </Grid>
+      <Grid size={9}>
+        <Grid container>
+          <Grid size={12}>
+            <Box component={"form"} sx={{ display: "flex", flexWrap: "wrap" }}>
+              <FormControl fullWidth>
+                <Controller
+                  name="selectedTree"
+                  control={control}
+                  render={({ field }) => (
+                    <>
+                      <InputLabel id={"tree-select"}>Select Journey</InputLabel>
+                      <Select {...field} labelId={"tree-select"}>
+                        {((journeyList as string[]) ?? [])
+                          .sort()
+                          .map((name, i) => (
+                            <MenuItem key={`tree-${i}`} value={name}>
+                              {name}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </>
+                  )}
                 />
-              </>
-            )}
-          />
-          <Controller
-            name={"contains"}
-            control={control}
-            render={({ field }) => (
-              <>
-                <TextField label={"Contains"} id={"contains"} {...field} />
-              </>
-            )}
-          />
-        </Box>
-        <div style={{ height: "80vh", width: "60vw" }}>
-          {journeyScripts && (
-            <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
-          )}
-        </div>
-      </div>
-    </div>
+              </FormControl>
+              <Controller
+                name={"startsWith"}
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <TextField
+                      label={"Starts With"}
+                      id={"starts-with"}
+                      {...field}
+                    />
+                  </>
+                )}
+              />
+              <Controller
+                name={"contains"}
+                control={control}
+                render={({ field }) => (
+                  <>
+                    <TextField label={"Contains"} id={"contains"} {...field} />
+                  </>
+                )}
+              />
+            </Box>
+          </Grid>
+          <Grid size={12} height={"80vh"}>
+            <Box
+              sx={{
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              {journeyScripts && (
+                <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
+              )}
+            </Box>
+          </Grid>
+        </Grid>
+      </Grid>
+    </Grid>
   );
 };
 
