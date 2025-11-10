@@ -35,7 +35,6 @@ const FlowInner = () => {
 
   const urlSearch = new URLSearchParams({
     starts_with: watch("startsWith") ?? "",
-    ends_with: watch("endsWith") ?? "",
     contains: watch("contains") ?? "",
   });
   const { data: journeyList } = useSWR(
@@ -147,7 +146,7 @@ const FlowInner = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "row" }}>
-      <div style={{ minWidth: "350px" }}>
+      <div style={{ minWidth: "350px", width: "30vw" }}>
         <FormControl fullWidth>
           <InputLabel id={"transaction-id"}>Select Transaction Id</InputLabel>
           <Select
@@ -208,15 +207,6 @@ const FlowInner = () => {
             )}
           />
           <Controller
-            name={"endsWith"}
-            control={control}
-            render={({ field }) => (
-              <>
-                <TextField label={"Ends With"} id={"ends-with"} {...field} />
-              </>
-            )}
-          />
-          <Controller
             name={"contains"}
             control={control}
             render={({ field }) => (
@@ -226,7 +216,7 @@ const FlowInner = () => {
             )}
           />
         </Box>
-        <div style={{ height: "90vh", width: "90vw" }}>
+        <div style={{ height: "80vh", width: "60vw" }}>
           {journeyScripts && (
             <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
           )}
