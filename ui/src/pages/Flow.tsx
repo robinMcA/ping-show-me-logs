@@ -1,117 +1,20 @@
-import BluetoothSearching from "@mui/icons-material/BluetoothSearching";
-import Search from "@mui/icons-material/Search";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Divider from "@mui/material/Divider";
-import Drawer from "@mui/material/Drawer";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  useOnSelectionChange,
+} from "@xyflow/react";
 import { useState } from "react";
-import "./App.css";
-import useSWR, { type Fetcher } from "swr";
-import { PingNode } from "./CustomNodes.tsx";
-import type { Root } from "./types";
-import { ReactFlow, useOnSelectionChange } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { Log } from "./Logs.tsx";
-
-const pages = ["manualLogs", "watchLogs", "flow"] as const;
-
-const simpleJsonFetcher: Fetcher<Root, string> = (url: string) =>
-  fetch(url).then((r) => r.json());
-
-const jsonFetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const DrawerList = (
-  toggleDrawer: (state: boolean) => () => void,
-  togglePage: (pageKey: (typeof pages)[number]) => void
-) => (
-  <Box sx={{ width: 250 }} role="presentation" onClick={toggleDrawer(false)}>
-    <List>
-      {[
-        ["Manual Logs", "manualLogs"],
-        ["Watch Logs", "watchLogs"],
-        ["Flow", "flow"],
-      ].map(([text, key], index) => (
-        <ListItem key={text} disablePadding>
-          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-          {/*// @ts-expect-error*/}
-          <ListItemButton onClick={() => togglePage(key)}>
-            <ListItemIcon>
-              {index % 2 === 0 ? <Search /> : <BluetoothSearching />}
-            </ListItemIcon>
-            <ListItemText primary={text} />
-          </ListItemButton>
-        </ListItem>
-      ))}
-    </List>
-    <Divider />
-  </Box>
-);
-
-const ManualLogs = () => {
-  const [frRequestId, setFrRequestId] = useState<string>();
-  const { data } = useSWR(
-    frRequestId === undefined
-      ? null
-      : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${frRequestId}?filters=Error`,
-    simpleJsonFetcher
-  );
-  return (
-    <>
-      <h3>From Form</h3>
-      <form className="card">
-        <label htmlFor={"frId"}>Fr request id </label>
-        <input
-          id={"frId"}
-          onChange={(event) => setFrRequestId(event.target.value)}
-        />
-      </form>
-      <ol>
-        {data?.result.map((res) => (
-          <li>{res.payload.message}</li>
-        ))}
-      </ol>
-    </>
-  );
-};
-
-const WatchLogs = () => {
-  const [watching, setWatching] = useState<string>("Error");
-  const { data: watchData } = useSWR(
-    `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/watch?filters=${watching ?? "All"}`,
-    simpleJsonFetcher
-  );
-  return (
-    <>
-      <h3>Watching</h3>
-      <label>logs types to keep</label>
-      <select
-        value={watching}
-        onChange={(event) => setWatching(event.target.value)}
-      >
-        <option value={"Warn"}>Warn</option>
-        <option value={"All"}>All</option>
-        <option value={"Error"}>Error</option>
-        <option value={"Debug"}>Debug</option>
-      </select>
-      <ol>
-        {watchData?.result.map((res) => (
-          <li>{res.payload.message}</li>
-        ))}
-      </ol>
-    </>
-  );
-};
+import useSWR from "swr";
+import { PingNode } from "./custom/CustomNodes.tsx";
+import { Log } from "./custom/Logs.tsx";
+import { jsonFetcher } from "./helpers.ts";
+import "./Flow.css";
 
 const nodeTypes = {
   ping: PingNode,
 };
 
-const ReactFlowComp = () => {
+const FlowInner = () => {
   const [startsWith, setStartsWith] = useState<string>("");
   const [endsWith, setEndsWith] = useState<string>("");
 
@@ -121,15 +24,15 @@ const ReactFlowComp = () => {
   });
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
-    jsonFetcher
+    jsonFetcher,
   );
   const [selectedJourney, setReselectedJourney] = useState<string>();
 
   const [selectedNode, setSelectedNode] = useState<string | undefined>(
-    undefined
+    undefined,
   );
   const [transactionId, setTransactionId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
 
   useOnSelectionChange({
@@ -148,7 +51,7 @@ const ReactFlowComp = () => {
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/flow${transactionId !== undefined ? `?transaction_id=${transactionId}` : ""}`,
-    jsonFetcher
+    jsonFetcher,
   );
 
   const { data: journeyTransactions } = useSWR(
@@ -161,26 +64,26 @@ const ReactFlowComp = () => {
           data: {
             transaction_id: string;
             timestamp: string;
-          }[]
+          }[],
         ) => [
           ...new Set(
             data
               .sort(({ timestamp: timestampA }, { timestamp: timestampB }) =>
-                timestampA > timestampB ? 1 : -1
+                timestampA > timestampB ? 1 : -1,
               )
               .map(({ transaction_id }) =>
-                transaction_id.split("-request")[0].replace(/\/\d/gu, "")
-              )
+                transaction_id.split("-request")[0].replace(/\/\d/gu, ""),
+              ),
           ),
-        ]
-      )
+        ],
+      ),
   );
 
   const { data: journeyScripts } = useSWR(
     selectedJourney === undefined
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey/${selectedJourney}/scripts`,
-    jsonFetcher
+    jsonFetcher,
   );
 
   console.info({ journeyScripts });
@@ -189,7 +92,7 @@ const ReactFlowComp = () => {
     !journeyScripts || !selectedNode || !transactionId
       ? null
       : `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/logs/${transactionId}?script_id=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?._id}&script_name=${journeyScripts?.[selectedNode]?.find((obj: Record<string, string>) => obj["type"] === "Scirpt")?.name}`,
-    jsonFetcher
+    jsonFetcher,
   );
 
   console.info(scriptLogs);
@@ -213,9 +116,10 @@ const ReactFlowComp = () => {
               ? "Fail"
               : node.data.name,
       },
-    })
+    }),
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const edges = journeyFlow?.edges.map((e: any) => ({
     ...e,
     markerEnd: "arrow",
@@ -245,7 +149,7 @@ const ReactFlowComp = () => {
             scriptLogs.result
               .filter(
                 (res: unknown) =>
-                  !JSON.stringify(res).includes("Unknown outcome")
+                  !JSON.stringify(res).includes("Unknown outcome"),
               )
               .map((log: { payload: Record<string, unknown> }, ix: number) => (
                 <Log key={ix} data={log.payload} />
@@ -289,38 +193,9 @@ const ReactFlowComp = () => {
   );
 };
 
-const Page = ({ selectedPage }: { selectedPage?: (typeof pages)[number] }) => {
-  switch (selectedPage) {
-    case "manualLogs":
-      return <ManualLogs />;
-    case "watchLogs":
-      return <WatchLogs />;
-    case "flow":
-      return <ReactFlowComp />;
-  }
-};
-
-function App() {
-  const [open, setOpen] = useState(false);
-
-  const [selectedPage, setSelectedPage] =
-    useState<(typeof pages)[number]>("flow");
-
-  const toggleDrawer = (newOpen: boolean) => () => {
-    setOpen(newOpen);
-  };
-
-  return (
-    <>
-      <Button onClick={toggleDrawer(true)}>Open Side Menu</Button>
-      <Drawer open={open} onClose={toggleDrawer(false)}>
-        {DrawerList(toggleDrawer, setSelectedPage)}
-      </Drawer>
-      <Box>
-        <Page selectedPage={selectedPage} />
-      </Box>
-    </>
-  );
-}
-
-export default App;
+const Flow = () => (
+  <ReactFlowProvider>
+    <FlowInner />
+  </ReactFlowProvider>
+);
+export default Flow;

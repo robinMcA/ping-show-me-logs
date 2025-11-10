@@ -30,7 +30,10 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
   const handles = data.handles as Array<Handle>;
 
   const [isOpen, setIsOpen] = useState(false);
-  const handleOpen = () => setIsOpen(true);
+  const handleOpen = () => {
+    window.top?.postMessage("hello", "*");
+    window.top?.postMessage("akjshfkasjhdfk");
+  };
   const handleClose = () => setIsOpen(false);
 
   const displayString = atob(data.scriptContent[1].script).split("\n");
