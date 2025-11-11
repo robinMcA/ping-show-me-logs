@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import "./Flow.css";
+import { useSearchParams } from "react-router";
 import useSWR from "swr";
 import { PingNode } from "./custom/CustomNodes.tsx";
 import { Log } from "./custom/Logs.tsx";
@@ -32,19 +33,26 @@ const nodeTypes = {
 };
 
 const FlowInner = () => {
-  const { watch, control } = useForm<Inputs>();
+  const [searchParams] = useSearchParams();
+  const values = {
+    startsWith: searchParams.get("startsWith") ?? undefined,
+    endsWith: searchParams.get("endsWith") ?? undefined,
+    container: searchParams.get("container") ?? undefined,
+    selectedTree: searchParams.get("selectedJourney") ?? undefined,
+  };
+  const { watch, control } = useForm<Inputs>({ defaultValues: values });
 
   const urlSearch = new URLSearchParams({
     starts_with: watch("startsWith") ?? "",
     contains: watch("contains") ?? "",
   });
+
   const { data: journeyList } = useSWR(
     `${document.URL.includes("5173") ? "http://localhost:8081" : ""}/api/journey?${urlSearch.toString()}`,
     jsonFetcher,
   );
 
   const selectedJourney = watch("selectedTree");
-  console.log(selectedJourney);
 
   const [selectedNode, setSelectedNode] = useState<string | undefined>(
     undefined,
