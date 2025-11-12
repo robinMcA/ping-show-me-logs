@@ -23,7 +23,7 @@ const WatchLogs = () => {
       </select>
       <ol>
         {watchData?.result.map((res) => (
-          <li>{res.payload.message}</li>
+          <li key={res.payload.transaction_id}>{res.payload.message}</li>
         ))}
       </ol>
     </>
