@@ -22,8 +22,8 @@ const SearchLogs = () => {
       </form>
       <ol>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any*/}
-        {data?.result.map((res: any) => (
-          <li>{res.payload.message}</li>
+        {data?.result.map((res: any, idx: number) => (
+          <li key={res.id ?? res.payload?.id ?? idx}>{res.payload.message}</li>
         ))}
       </ol>
     </>
