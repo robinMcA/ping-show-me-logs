@@ -2,7 +2,8 @@ import { Handle, type NodeProps, Position, type Node } from "@xyflow/react";
 import { useState } from "react";
 import Modal from "@mui/material/Modal";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
+import { ContextAwareButton } from "../../components";
+
 export type PingNode = Node<
   {
     handles: Array<Handle>;
@@ -30,10 +31,8 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
   const handles = data.handles as Array<Handle>;
 
   const [isOpen, setIsOpen] = useState(false);
-  const handleOpen = () => {
-    window.top?.postMessage("hello", "*");
-    window.top?.postMessage("akjshfkasjhdfk");
-  };
+  const handleOpen = () => setIsOpen(true);
+
   const handleClose = () => setIsOpen(false);
 
   const displayString = atob(data.scriptContent[1].script).split("\n");
@@ -48,7 +47,7 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
               key={i}
               id="modal-modal-description"
             >
-              {`        ${line}`}
+              {line}
             </p>
           ))}
         </Box>
@@ -79,12 +78,17 @@ export const PingNode = ({ data }: NodeProps<PingNode>) => {
       <div>{data?.name ?? "ToDo"}</div>
       <div>{data?.type ?? "ToDo"}</div>
       <div style={{ position: "absolute", bottom: 0 }}>
-        <Button
+        <ContextAwareButton
           style={{ margin: 0, padding: 0, fontSize: "x-small" }}
           onClick={handleOpen}
+          vsCodeMessage={{
+            event: "open",
+            script: data?.name,
+            content: displayString,
+          }}
         >
           Script
-        </Button>
+        </ContextAwareButton>
       </div>
     </>
   );

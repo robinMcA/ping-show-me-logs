@@ -11,7 +11,8 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import "@xyflow/react/dist/style.css";
 import { type ReactNode, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { AppSharedContext } from "./Contexts.tsx";
 
 const DrawerList = ({
   toggleDrawer,
@@ -47,15 +48,18 @@ const AppNav = ({ children }: { children: ReactNode }) => {
   const toggleDrawer = (newOpen: boolean) => () => {
     setOpen(newOpen);
   };
+  const [urlSearchPrams] = useSearchParams();
 
   return (
-    <div style={{ height: "90vh", width: "97vw" }}>
-      <Button onClick={toggleDrawer(true)}>Open Side Menu</Button>
-      <Drawer open={open} onClose={toggleDrawer(false)}>
-        <DrawerList toggleDrawer={toggleDrawer} />
-      </Drawer>
-      <>{children}</>
-    </div>
+    <AppSharedContext value={{ location: urlSearchPrams.get("view") ?? "web" }}>
+      <div style={{ height: "90vh", width: "97vw" }}>
+        <Button onClick={toggleDrawer(true)}>Open Side Menu</Button>
+        <Drawer open={open} onClose={toggleDrawer(false)}>
+          <DrawerList toggleDrawer={toggleDrawer} />
+        </Drawer>
+        <>{children}</>
+      </div>
+    </AppSharedContext>
   );
 };
 
