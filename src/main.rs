@@ -7,11 +7,12 @@ use crate::workers::scripts::{RichScript, ScriptConfig,  list_scripts, get_rich_
 use actix_web::http::header::ContentType;
 use actix_web::rt::time::sleep;
 use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get, mime, rt, web};
-use futures_util::StreamExt as _;
+use std::sync::mpsc::{Sender};
 use reqwest::Client;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 use std::time::Duration;
 
 mod errors;
@@ -30,7 +31,9 @@ struct AppMutState {
   key: String,
   log: String,
   script_config: Mutex<HashMap<String, ScriptConfig>>,
+  txs: Arc<Mutex<Vec<Sender<String>>>>,
 }
+
 // this could be done with rust embed
 async fn index(req: HttpRequest) -> Result<HttpResponse, ShowMeErrors> {
   let path: PathBuf = req
@@ -101,6 +104,39 @@ struct NodeOutcomeEdge {
   outcome: String,
 }
 
+async fn echo(req: HttpRequest, stream: web::Payload, data: web::Data<AppMutState>) -> Result<HttpResponse, ShowMeErrors> {
+  let (res, mut session, _) = actix_ws::handle(&req, stream)?;
+
+  rt::spawn(async move { 
+    let (tx, rx) = mpsc::channel();
+
+    {
+      let mutex = data.txs.clone();
+      let mut senders = mutex.lock().unwrap();
+      senders.push(tx.clone());
+    }
+
+    let binding = req.connection_info();
+    let host = binding.host();
+    
+    println!("{} connected.", host);
+
+    // forward messages back
+    loop {
+      if let Ok(msg) = rx.recv() {
+        let send_result = session.text(msg.to_owned()).await;
+        if send_result.is_err() {
+          println!("{} disconnected.", host);
+          return;
+        }
+      }
+    }
+  });
+
+  // respond immediately with response connected to WS session
+  Ok(res)
+}
+
 #[actix_web::main]
 async fn main() -> Result<(), ShowMeErrors> {
   let (token, payload_init) = Token::new().await?;
@@ -127,6 +163,7 @@ async fn main() -> Result<(), ShowMeErrors> {
     key,
     log: url,
     script_config: Mutex::new(HashMap::new()),
+    txs: Arc::new(Mutex::new(Vec::new())),
   });
 
   let data = state.clone();
@@ -152,6 +189,39 @@ async fn main() -> Result<(), ShowMeErrors> {
     Ok::<(), ShowMeErrors>(())
   });
 
+  // multiple sources
+  let (tx, rx) = mpsc::channel();
+
+  {
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+      loop {
+        tx2.send(String::from("test")).unwrap();
+        thread::sleep(Duration::from_millis(80))
+      }
+    });
+
+    let tx2 = tx.clone();
+    thread::spawn(move || {
+      loop {
+        tx2.send(String::from("src 2")).unwrap();
+        thread::sleep(Duration::from_millis(160))
+      }
+    });
+  }
+
+  // broadcast service
+  let senders_mutex = state.txs.clone();
+  thread::spawn(move || {
+    loop {
+      while let Ok(msg) = rx.recv() {
+        // TODO: do transformations here
+
+        let mut senders = senders_mutex.lock().unwrap();
+        senders.retain(|tx| tx.send(msg.to_owned()).is_ok());
+      }
+    }
+  });
 
   HttpServer::new(move || {
     let cors = actix_cors::Cors::permissive().allow_any_header();
@@ -162,6 +232,7 @@ async fn main() -> Result<(), ShowMeErrors> {
         web::scope("/api")
           .configure(trees_api)
           .configure(log_api)
+          .route("/echo", web::get().to(echo))
           .service(web::scope("/monitoring").service(am).service(idm)),
       )
       .route("/{filename:.*}", web::get().to(index))
